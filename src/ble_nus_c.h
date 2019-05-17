@@ -124,7 +124,8 @@ typedef enum
 {
 	BLE_NUS_C_EVT_DISCOVERY_AVAILABLE,	/**< Event indicating that a service and its characteristics was found. */
     BLE_NUS_C_EVT_DISCOVERY_COMPLETE,   /**< Event indicating that all the services and handles were found. */
-    BLE_NUS_C_EVT_NUS_TX_EVT,           /**< Event indicating that the central has received something from a peer. */
+    BLE_NUS_C_EVT_NUS_EEG_TX_EVT,           /**< Event indicating that the central has received EEG data from a peer. */
+	BLE_NUS_C_EVT_NUS_PPG_TX_EVT,           /**< Event indicating that the central has received PPG data from a peer. */
     BLE_NUS_C_EVT_DISCONNECTED          /**< Event indicating that the NUS server has disconnected. */
 } ble_nus_c_evt_type_t;
 

@@ -52,6 +52,103 @@
 #include "nrf_log.h"
 NRF_LOG_MODULE_REGISTER();
 
+#define TX_BUFFER_MASK         0x07                  /**< TX Buffer mask, must be a mask of continuous zeroes, followed by continuous sequence of ones: 000...111. */
+#define TX_BUFFER_SIZE         (TX_BUFFER_MASK + 1)  /**< Size of send buffer, which is 1 higher than the mask. */
+
+#define WRITE_MESSAGE_LENGTH   BLE_CCCD_VALUE_LEN    /**< Length of the write message for CCCD. */
+#define WRITE_MESSAGE_LENGTH   BLE_CCCD_VALUE_LEN    /**< Length of the write message for CCCD. */
+
+typedef enum
+{
+    READ_REQ,  /**< Type identifying that this tx_message is a read request. */
+    WRITE_REQ  /**< Type identifying that this tx_message is a write request. */
+} tx_request_t;
+
+/**@brief Structure for writing a message to the peer, i.e. CCCD.
+ */
+typedef struct
+{
+    uint8_t                  gattc_value[WRITE_MESSAGE_LENGTH];  /**< The message to write. */
+    ble_gattc_write_params_t gattc_params;                       /**< GATTC parameters for this message. */
+} write_params_t;
+
+/**@brief Structure for holding data to be transmitted to the connected central.
+ */
+typedef struct
+{
+    uint16_t     conn_handle;  /**< Connection handle to be used when transmitting this message. */
+    tx_request_t type;         /**< Type of this message, i.e. read or write message. */
+    union
+    {
+        uint16_t       read_handle;  /**< Read request message. */
+        write_params_t write_req;    /**< Write request message. */
+    } req;
+} tx_message_t;
+
+
+static tx_message_t  m_tx_buffer[TX_BUFFER_SIZE];  /**< Transmit buffer for messages to be transmitted to the central. */
+static uint32_t      m_tx_insert_index = 0;        /**< Current index in the transmit buffer where the next message should be inserted. */
+static uint32_t      m_tx_index = 0;               /**< Current index in the transmit buffer from where the next message to be transmitted resides. */
+
+
+/**@brief Function for passing any pending request from the buffer to the stack.
+ */
+static void tx_buffer_process(void)
+{
+    if (m_tx_index != m_tx_insert_index)
+    {
+        uint32_t err_code;
+
+        if (m_tx_buffer[m_tx_index].type == READ_REQ)
+        {
+            err_code = sd_ble_gattc_read(m_tx_buffer[m_tx_index].conn_handle,
+                                         m_tx_buffer[m_tx_index].req.read_handle,
+                                         0);
+        }
+        else
+        {
+            err_code = sd_ble_gattc_write(m_tx_buffer[m_tx_index].conn_handle,
+                                          &m_tx_buffer[m_tx_index].req.write_req.gattc_params);
+        }
+
+        if (err_code != NRF_SUCCESS)
+        {
+            NRF_LOG_DEBUG("SD Read/Write API returns error. This message sending will be "
+                          "attempted again..");
+        }
+    }
+}
+
+
+/**@brief     Function for handling write response events.
+ *
+ * @param[in] p_ble_nus_c Pointer to the Heart Rate Client structure.
+ * @param[in] p_ble_evt   Pointer to the BLE event received.
+ */
+static void on_write_rsp(ble_nus_c_t * p_ble_nus_c, const ble_evt_t * p_ble_evt)
+{
+    // Check if the event if on the link for this instance
+    if (p_ble_nus_c->conn_handle != p_ble_evt->evt.gattc_evt.conn_handle)
+    {
+        return;
+    }
+
+    if ((p_ble_evt->evt.gattc_evt.gatt_status == BLE_GATT_STATUS_ATTERR_INSUF_AUTHENTICATION) ||
+        (p_ble_evt->evt.gattc_evt.gatt_status == BLE_GATT_STATUS_ATTERR_INSUF_ENCRYPTION))
+    {
+        // Do nothing to reattempt write.
+    }
+    else
+    {
+        m_tx_index++;
+        m_tx_index &= TX_BUFFER_MASK;
+    }
+
+    // Check if there is any message to be sent across to the peer and send it.
+    tx_buffer_process();
+}
+
+
 void ble_nus_c_on_db_disc_evt(ble_nus_c_t * p_ble_nus_c, ble_db_discovery_evt_t * p_evt)
 {
     ble_nus_c_evt_t nus_c_evt;
@@ -126,13 +223,26 @@ static void on_hvx(ble_nus_c_t * p_ble_nus_c, ble_evt_t const * p_ble_evt)
     {
         ble_nus_c_evt_t ble_nus_c_evt;
 
-        ble_nus_c_evt.evt_type = BLE_NUS_C_EVT_NUS_TX_EVT;
+        ble_nus_c_evt.evt_type = BLE_NUS_C_EVT_NUS_EEG_TX_EVT;
         ble_nus_c_evt.p_data   = (uint8_t *)p_ble_evt->evt.gattc_evt.params.hvx.data;
         ble_nus_c_evt.data_len = p_ble_evt->evt.gattc_evt.params.hvx.len;
 
         p_ble_nus_c->evt_handler(p_ble_nus_c, &ble_nus_c_evt);
-        NRF_LOG_DEBUG("Client sending data.");
+        NRF_LOG_DEBUG("Client sending EEG data.");
     }
+    else if (   (p_ble_nus_c->handles.nus_ppg_tx_handle != BLE_GATT_HANDLE_INVALID)
+            && (p_ble_evt->evt.gattc_evt.params.hvx.handle == p_ble_nus_c->handles.nus_ppg_tx_handle)
+            && (p_ble_nus_c->evt_handler != NULL))
+        {
+            ble_nus_c_evt_t ble_nus_c_evt;
+
+            ble_nus_c_evt.evt_type = BLE_NUS_C_EVT_NUS_PPG_TX_EVT;
+            ble_nus_c_evt.p_data   = (uint8_t *)p_ble_evt->evt.gattc_evt.params.hvx.data;
+            ble_nus_c_evt.data_len = p_ble_evt->evt.gattc_evt.params.hvx.len;
+
+            p_ble_nus_c->evt_handler(p_ble_nus_c, &ble_nus_c_evt);
+            NRF_LOG_DEBUG("Client sending PPG data.");
+        }
 }
 
 uint32_t ble_nus_c_init(ble_nus_c_t * p_ble_nus_c, ble_nus_c_init_t * p_ble_nus_c_init)
@@ -190,6 +300,10 @@ void ble_nus_c_on_ble_evt(ble_evt_t const * p_ble_evt, void * p_context)
             on_hvx(p_ble_nus_c, p_ble_evt);
             break;
 
+        case BLE_GATTC_EVT_WRITE_RSP:
+            on_write_rsp(p_ble_nus_c, p_ble_evt);
+            break;
+
         case BLE_GAP_EVT_DISCONNECTED:
             if (p_ble_evt->evt.gap_evt.conn_handle == p_ble_nus_c->conn_handle
                     && p_ble_nus_c->evt_handler != NULL)
@@ -209,25 +323,31 @@ void ble_nus_c_on_ble_evt(ble_evt_t const * p_ble_evt, void * p_context)
     }
 }
 
-/**@brief Function for creating a message for writing to the CCCD. */
-static uint32_t cccd_configure(uint16_t conn_handle, uint16_t cccd_handle, bool enable)
+/**@brief Function for creating a message for writing to the CCCD.
+ */
+static uint32_t cccd_configure(uint16_t conn_handle, uint16_t handle_cccd, bool enable)
 {
-    uint8_t buf[BLE_CCCD_VALUE_LEN];
+    NRF_LOG_DEBUG("Configuring CCCD. CCCD Handle = %d, Connection Handle = %d",
+        handle_cccd,conn_handle);
 
-    buf[0] = enable ? BLE_GATT_HVX_NOTIFICATION : 0;
-    buf[1] = 0;
+    tx_message_t * p_msg;
+    uint16_t       cccd_val = enable ? BLE_GATT_HVX_NOTIFICATION : 0;
 
-    ble_gattc_write_params_t const write_params =
-    {
-        .write_op = BLE_GATT_OP_WRITE_REQ,
-        .flags    = BLE_GATT_EXEC_WRITE_FLAG_PREPARED_WRITE,
-        .handle   = cccd_handle,
-        .offset   = 0,
-        .len      = sizeof(buf),
-        .p_value  = buf
-    };
+    p_msg              = &m_tx_buffer[m_tx_insert_index++];
+    m_tx_insert_index &= TX_BUFFER_MASK;
 
-    return sd_ble_gattc_write(conn_handle, &write_params);
+    p_msg->req.write_req.gattc_params.handle   = handle_cccd;
+    p_msg->req.write_req.gattc_params.len      = WRITE_MESSAGE_LENGTH;
+    p_msg->req.write_req.gattc_params.p_value  = p_msg->req.write_req.gattc_value;
+    p_msg->req.write_req.gattc_params.offset   = 0;
+    p_msg->req.write_req.gattc_params.write_op = BLE_GATT_OP_WRITE_REQ;
+    p_msg->req.write_req.gattc_value[0]        = LSB_16(cccd_val);
+    p_msg->req.write_req.gattc_value[1]        = MSB_16(cccd_val);
+    p_msg->conn_handle                         = conn_handle;
+    p_msg->type                                = WRITE_REQ;
+
+    tx_buffer_process();
+    return NRF_SUCCESS;
 }
 
 

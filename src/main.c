@@ -92,6 +92,8 @@ static uint16_t m_ble_nus_max_data_len = BLE_GATT_ATT_MTU_DEFAULT - OPCODE_LENGT
 //};
 
 static char const m_target_periph_name[] = "Hearable";
+#define EEG_PREFIX "EEG "
+#define PPG_PREFIX "PPG "
 
 /**@brief Function for handling asserts in the SoftDevice.
  *
@@ -334,10 +336,10 @@ static void ble_nus_c_evt_handler(ble_nus_c_t * p_ble_nus_c, ble_nus_c_evt_t con
 					&& p_ble_nus_c->handles.nus_ppg_tx_cccd_handle
 			)
 			{
+				err_code = ble_nus_c_tx_notif_enable(p_ble_nus_c,&(p_ble_nus_c->handles.nus_ppg_tx_cccd_handle));
+				APP_ERROR_CHECK(err_code);
 				err_code = ble_nus_c_tx_notif_enable(p_ble_nus_c,&(p_ble_nus_c->handles.nus_eeg_tx_cccd_handle));
 				APP_ERROR_CHECK(err_code);
-//				err_code = ble_nus_c_tx_notif_enable(p_ble_nus_c,&(p_ble_nus_c->handles.nus_ppg_tx_cccd_handle));
-//				APP_ERROR_CHECK(err_code);
 				NRF_LOG_INFO("Connected to device with Hearable EEG & PPG Service.");
 			}
 			else
@@ -353,8 +355,14 @@ static void ble_nus_c_evt_handler(ble_nus_c_t * p_ble_nus_c, ble_nus_c_evt_t con
             APP_ERROR_CHECK(err_code);
 			break;
 
-        case BLE_NUS_C_EVT_NUS_TX_EVT:
+        case BLE_NUS_C_EVT_NUS_EEG_TX_EVT:
+        	ble_nus_chars_received_uart_print((const uint8_t *) EEG_PREFIX,strlen(EEG_PREFIX));
             ble_nus_chars_received_uart_print(p_ble_nus_evt->p_data, p_ble_nus_evt->data_len);
+            break;
+
+        case BLE_NUS_C_EVT_NUS_PPG_TX_EVT:
+        	ble_nus_chars_received_uart_print((const uint8_t *) PPG_PREFIX,strlen(PPG_PREFIX));
+        	ble_nus_chars_received_uart_print(p_ble_nus_evt->p_data, p_ble_nus_evt->data_len);
             break;
 
         case BLE_NUS_C_EVT_DISCONNECTED:
