@@ -54,7 +54,6 @@ SRC_FILES += \
   $(SDK_ROOT)/external/segger_rtt/SEGGER_RTT_Syscalls_GCC.c \
   $(SDK_ROOT)/external/segger_rtt/SEGGER_RTT_printf.c \
   $(SDK_ROOT)/components/ble/common/ble_advdata.c \
-  $(SDK_ROOT)/components/ble/ble_db_discovery/ble_db_discovery.c \
   $(SDK_ROOT)/components/ble/common/ble_srv_common.c \
   $(SDK_ROOT)/components/ble/nrf_ble_gatt/nrf_ble_gatt.c \
   $(SDK_ROOT)/components/ble/nrf_ble_scan/nrf_ble_scan.c \
@@ -63,8 +62,9 @@ SRC_FILES += \
   $(SDK_ROOT)/components/softdevice/common/nrf_sdh_ble.c \
   $(SDK_ROOT)/components/softdevice/common/nrf_sdh_soc.c \
   $(PROJ_DIR)/src/main.c \
-  $(PROJ_DIR)/src/ble_nus_c.c 
-
+  $(PROJ_DIR)/src/ble_nus_c.c \
+  $(PROJ_DIR)/src/ble_db_discovery.c \
+  
 # Include folders common to all targets
 INC_FOLDERS += \
   $(SDK_ROOT)/components/nfc/ndef/generic/message \
@@ -107,7 +107,6 @@ INC_FOLDERS += \
   $(SDK_ROOT)/components/ble/common \
   $(SDK_ROOT)/components/ble/ble_services/ble_lls \
   $(SDK_ROOT)/components/libraries/bsp \
-  $(SDK_ROOT)/components/ble/ble_db_discovery \
   $(SDK_ROOT)/components/nfc/ndef/connection_handover/ac_rec \
   $(SDK_ROOT)/components/ble/ble_services/ble_bas \
   $(SDK_ROOT)/components/libraries/mpu \
@@ -203,7 +202,7 @@ INC_FOLDERS += \
 LIB_FILES += \
 
 # Optimization flags
-OPT = -O3 -g3
+OPT = -O0 -g3
 # Uncomment the line below to enable link time optimization
 #OPT += -flto
 
@@ -221,11 +220,13 @@ CFLAGS += -DSOFTDEVICE_PRESENT
 CFLAGS += -DSWI_DISABLE0
 CFLAGS += -mcpu=cortex-m4
 CFLAGS += -mthumb -mabi=aapcs
-CFLAGS += -Wall -Werror
+CFLAGS += -Wall
 CFLAGS += -mfloat-abi=hard -mfpu=fpv4-sp-d16
 # keep every function in a separate section, this allows linker to discard unused ones
 CFLAGS += -ffunction-sections -fdata-sections -fno-strict-aliasing
 CFLAGS += -fno-builtin -fshort-enums
+
+#CFLAGS += -DDEBUG
 
 # C++ flags common to all targets
 CXXFLAGS += $(OPT)
@@ -245,6 +246,8 @@ ASMFLAGS += -DNRF_SD_BLE_API_VERSION=6
 ASMFLAGS += -DS132
 ASMFLAGS += -DSOFTDEVICE_PRESENT
 ASMFLAGS += -DSWI_DISABLE0
+
+#ASMFLAGS += -DDEBUG
 
 # Linker flags
 LDFLAGS += $(OPT)

@@ -67,8 +67,8 @@
 #define APP_BLE_OBSERVER_PRIO   3                                       /**< BLE observer priority of the application. There is no need to modify this value. */
 
 //TODO Change this?
-#define UART_TX_BUF_SIZE        256                                     /**< UART TX buffer size. */
-#define UART_RX_BUF_SIZE        256                                     /**< UART RX buffer size. */
+#define UART_TX_BUF_SIZE        2048                                     /**< UART TX buffer size. */
+#define UART_RX_BUF_SIZE        2048                                    /**< UART RX buffer size. */
 
 #define NUS_SERVICE_UUID_TYPE   BLE_UUID_TYPE_VENDOR_BEGIN              /**< UUID type for the Nordic UART Service (vendor specific). */
 
@@ -85,12 +85,13 @@ static uint16_t m_ble_nus_max_data_len = BLE_GATT_ATT_MTU_DEFAULT - OPCODE_LENGT
 
 /**@brief NUS UUID. */
 //TODO Change this?
-static ble_uuid_t const m_nus_uuid =
-{
-    .uuid = BLE_UUID_NUS_SERVICE,
-    .type = NUS_SERVICE_UUID_TYPE
-};
+//static ble_uuid_t const m_match_uuid =
+//{
+//    .uuid = BLE_UUID_EEG_NUS_SERVICE,
+//    .type = NUS_SERVICE_UUID_TYPE
+//};
 
+static char const m_target_periph_name[] = "Hearable";
 
 /**@brief Function for handling asserts in the SoftDevice.
  *
@@ -114,10 +115,12 @@ static void scan_start(void)
 {
     ret_code_t ret;
 
+    NRF_LOG_INFO("STARTING SCAN");
     ret = nrf_ble_scan_start(&m_scan);
     APP_ERROR_CHECK(ret);
 
     ret = bsp_indication_set(BSP_INDICATE_SCANNING);
+
     APP_ERROR_CHECK(ret);
 }
 
@@ -127,7 +130,7 @@ static void scan_start(void)
 static void scan_evt_handler(scan_evt_t const * p_scan_evt)
 {
     ret_code_t err_code;
-
+    NRF_LOG_INFO("Scan event: %d",p_scan_evt->scan_evt_id);
     switch(p_scan_evt->scan_evt_id)
     {
          case NRF_BLE_SCAN_EVT_CONNECTING_ERROR:
@@ -178,11 +181,17 @@ static void scan_init(void)
     err_code = nrf_ble_scan_init(&m_scan, &init_scan, scan_evt_handler);
     APP_ERROR_CHECK(err_code);
 
-    err_code = nrf_ble_scan_filter_set(&m_scan, SCAN_UUID_FILTER, &m_nus_uuid);
-    APP_ERROR_CHECK(err_code);
+// Setting filters for scanning.
+	err_code = nrf_ble_scan_filters_enable(&m_scan, NRF_BLE_SCAN_NAME_FILTER, false);
+	APP_ERROR_CHECK(err_code);
 
-    err_code = nrf_ble_scan_filters_enable(&m_scan, NRF_BLE_SCAN_UUID_FILTER, false);
-    APP_ERROR_CHECK(err_code);
+	err_code = nrf_ble_scan_filter_set(&m_scan, SCAN_NAME_FILTER, m_target_periph_name);
+	APP_ERROR_CHECK(err_code);
+//    err_code = nrf_ble_scan_filter_set(&m_scan, SCAN_UUID_FILTER, &m_match_uuid);
+//    APP_ERROR_CHECK(err_code);
+
+//    err_code = nrf_ble_scan_filters_enable(&m_scan, NRF_BLE_SCAN_UUID_FILTER, false);
+//    APP_ERROR_CHECK(err_code);
 }
 
 
@@ -315,15 +324,34 @@ static void ble_nus_c_evt_handler(ble_nus_c_t * p_ble_nus_c, ble_nus_c_evt_t con
 
     switch (p_ble_nus_evt->evt_type)
     {
+    	case BLE_NUS_C_EVT_DISCOVERY_AVAILABLE:
+    		NRF_LOG_INFO("Discovery available.");
+			if (p_ble_nus_c->handles.nus_eeg_rx_handle
+					&& p_ble_nus_c->handles.nus_eeg_tx_handle
+					&& p_ble_nus_c->handles.nus_eeg_tx_cccd_handle
+//					&& p_ble_nus_c->handles.nus_ppg_rx_handle
+					&& p_ble_nus_c->handles.nus_ppg_tx_handle
+					&& p_ble_nus_c->handles.nus_ppg_tx_cccd_handle
+			)
+			{
+				err_code = ble_nus_c_tx_notif_enable(p_ble_nus_c,&(p_ble_nus_c->handles.nus_eeg_tx_cccd_handle));
+				APP_ERROR_CHECK(err_code);
+//				err_code = ble_nus_c_tx_notif_enable(p_ble_nus_c,&(p_ble_nus_c->handles.nus_ppg_tx_cccd_handle));
+//				APP_ERROR_CHECK(err_code);
+				NRF_LOG_INFO("Connected to device with Hearable EEG & PPG Service.");
+			}
+			else
+			{
+//				err_code = ble_db_discovery_start(&m_db_disc, p_ble_evt->evt.gap_evt.conn_handle);
+//				APP_ERROR_CHECK(err_code);
+				NRF_LOG_DEBUG("Didn't discover all the necessary characteristic handles");
+			}
+			break;
         case BLE_NUS_C_EVT_DISCOVERY_COMPLETE:
-            NRF_LOG_INFO("Discovery complete.");
-            err_code = ble_nus_c_handles_assign(p_ble_nus_c, p_ble_nus_evt->conn_handle, &p_ble_nus_evt->handles);
+        	NRF_LOG_INFO("Discovery complete event.");
+            err_code = ble_nus_c_handles_assign(p_ble_nus_c, p_ble_nus_evt->conn_handle, p_ble_nus_evt->srv_uuid, &p_ble_nus_evt->handles);
             APP_ERROR_CHECK(err_code);
-
-            err_code = ble_nus_c_tx_notif_enable(p_ble_nus_c);
-            APP_ERROR_CHECK(err_code);
-            NRF_LOG_INFO("Connected to device with Nordic UART Service.");
-            break;
+			break;
 
         case BLE_NUS_C_EVT_NUS_TX_EVT:
             ble_nus_chars_received_uart_print(p_ble_nus_evt->p_data, p_ble_nus_evt->data_len);
@@ -378,15 +406,18 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
     ret_code_t            err_code;
     ble_gap_evt_t const * p_gap_evt = &p_ble_evt->evt.gap_evt;
 
+    NRF_LOG_INFO("BLE_EVT: 0x%x, ",p_ble_evt->header.evt_id);
     switch (p_ble_evt->header.evt_id)
     {
         case BLE_GAP_EVT_CONNECTED:
-            err_code = ble_nus_c_handles_assign(&m_ble_nus_c, p_ble_evt->evt.gap_evt.conn_handle, NULL);
+            err_code = ble_nus_c_handles_assign(&m_ble_nus_c, p_ble_evt->evt.gap_evt.conn_handle,BLE_UUID_EEG_NUS_SERVICE, NULL);
+            APP_ERROR_CHECK(err_code);
+            err_code = ble_nus_c_handles_assign(&m_ble_nus_c, p_ble_evt->evt.gap_evt.conn_handle,BLE_UUID_PPG_NUS_SERVICE, NULL);
             APP_ERROR_CHECK(err_code);
 
             err_code = bsp_indication_set(BSP_INDICATE_CONNECTED);
             APP_ERROR_CHECK(err_code);
-
+            NRF_LOG_INFO("Connected");
             // start discovery of services. The NUS Client waits for a discovery result
             err_code = ble_db_discovery_start(&m_db_disc, p_ble_evt->evt.gap_evt.conn_handle);
             APP_ERROR_CHECK(err_code);
@@ -547,7 +578,7 @@ static void uart_init(void)
         .cts_pin_no   = CTS_PIN_NUMBER,
         .flow_control = APP_UART_FLOW_CONTROL_DISABLED,
         .use_parity   = false,
-        .baud_rate    = UART_BAUDRATE_BAUDRATE_Baud115200
+        .baud_rate    = UART_BAUDRATE_BAUDRATE_Baud1M
     };
 
     APP_UART_FIFO_INIT(&comm_params,

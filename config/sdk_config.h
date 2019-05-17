@@ -194,12 +194,12 @@
 #endif
 // <o> NRF_BLE_SCAN_UUID_CNT - Number of filters for UUIDs. 
 #ifndef NRF_BLE_SCAN_UUID_CNT
-#define NRF_BLE_SCAN_UUID_CNT 1
+#define NRF_BLE_SCAN_UUID_CNT 0
 #endif
 
 // <o> NRF_BLE_SCAN_NAME_CNT - Number of name filters. 
 #ifndef NRF_BLE_SCAN_NAME_CNT
-#define NRF_BLE_SCAN_NAME_CNT 0
+#define NRF_BLE_SCAN_NAME_CNT 1
 #endif
 
 // <o> NRF_BLE_SCAN_SHORT_NAME_CNT - Number of short name filters. 
@@ -4381,7 +4381,7 @@
 // <268435456=> 1000000 baud 
 
 #ifndef NRFX_UARTE_DEFAULT_CONFIG_BAUDRATE
-#define NRFX_UARTE_DEFAULT_CONFIG_BAUDRATE 30801920
+#define NRFX_UARTE_DEFAULT_CONFIG_BAUDRATE 268435456
 #endif
 
 // <o> NRFX_UARTE_DEFAULT_CONFIG_IRQ_PRIORITY  - Interrupt priority
@@ -4396,7 +4396,7 @@
 // <7=> 7 
 
 #ifndef NRFX_UARTE_DEFAULT_CONFIG_IRQ_PRIORITY
-#define NRFX_UARTE_DEFAULT_CONFIG_IRQ_PRIORITY 6
+#define NRFX_UARTE_DEFAULT_CONFIG_IRQ_PRIORITY 5
 #endif
 
 // <e> NRFX_UARTE_CONFIG_LOG_ENABLED - Enables logging in the module.
@@ -7568,7 +7568,7 @@
 // <i> longer one will be fragmented.
 
 #ifndef NRF_LOG_BACKEND_RTT_TEMP_BUFFER_SIZE
-#define NRF_LOG_BACKEND_RTT_TEMP_BUFFER_SIZE 64
+#define NRF_LOG_BACKEND_RTT_TEMP_BUFFER_SIZE 1000
 #endif
 
 // <o> NRF_LOG_BACKEND_RTT_TX_RETRY_DELAY_MS - Period before retrying writing to RTT 
@@ -7604,7 +7604,7 @@
 // <i> a timestamp and up to 2 arguments in a single memory object.
 
 #ifndef NRF_LOG_MSGPOOL_ELEMENT_SIZE
-#define NRF_LOG_MSGPOOL_ELEMENT_SIZE 20
+#define NRF_LOG_MSGPOOL_ELEMENT_SIZE 300
 #endif
 
 // <o> NRF_LOG_MSGPOOL_ELEMENT_COUNT - Number of elements in the pool of memory objects 
@@ -7664,7 +7664,7 @@
 // <4=> Debug 
 
 #ifndef NRF_LOG_DEFAULT_LEVEL
-#define NRF_LOG_DEFAULT_LEVEL 3
+#define NRF_LOG_DEFAULT_LEVEL 2
 #endif
 
 // <q> NRF_LOG_DEFERRED  - Enable deffered logger.
@@ -7673,7 +7673,7 @@
 // <i> Log data is buffered and can be processed in idle.
 
 #ifndef NRF_LOG_DEFERRED
-#define NRF_LOG_DEFERRED 1
+#define NRF_LOG_DEFERRED 0
 #endif
 
 // <q> NRF_LOG_FILTERS_ENABLED  - Enable dynamic filtering of logs.
@@ -11156,12 +11156,12 @@
 
 // <o> NRF_SDH_BLE_GATTS_ATTR_TAB_SIZE - Attribute Table size in bytes. The size must be a multiple of 4. 
 #ifndef NRF_SDH_BLE_GATTS_ATTR_TAB_SIZE
-#define NRF_SDH_BLE_GATTS_ATTR_TAB_SIZE 1408
+#define NRF_SDH_BLE_GATTS_ATTR_TAB_SIZE 2000
 #endif
 
 // <o> NRF_SDH_BLE_VS_UUID_COUNT - The number of vendor-specific UUIDs. 
 #ifndef NRF_SDH_BLE_VS_UUID_COUNT
-#define NRF_SDH_BLE_VS_UUID_COUNT 1
+#define NRF_SDH_BLE_VS_UUID_COUNT 4
 #endif
 
 // <q> NRF_SDH_BLE_SERVICE_CHANGED  - Include the Service Changed characteristic in the Attribute Table.

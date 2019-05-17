@@ -175,6 +175,27 @@ static void discovery_error_evt_trigger(ble_db_discovery_t * p_db_discovery,
     }
 }
 
+static void discovery_available_evt_trigger(ble_db_discovery_t * const p_db_discovery,
+                                        uint32_t                   err_code,
+                                        uint16_t const             conn_handle)
+{
+    ble_db_discovery_evt_handler_t p_evt_handler;
+    ble_gatt_db_srv_t            * p_srv_being_discovered;
+
+    p_srv_being_discovered = &(p_db_discovery->services[p_db_discovery->curr_srv_ind]);
+
+    p_evt_handler = registered_handler_get(&(p_srv_being_discovered->srv_uuid));
+
+    if (p_evt_handler != NULL)
+    {
+        ble_db_discovery_evt_t evt;
+
+        evt.conn_handle     = conn_handle;
+        evt.evt_type        = BLE_DB_DISCOVERY_AVAILABLE;
+        p_evt_handler(&evt);
+    }
+}
+
 
 /**@brief     Function for triggering a Discovery Complete or Service Not Found event to the
  *            application.
@@ -285,9 +306,9 @@ static void on_srv_disc_completion(ble_db_discovery_t * p_db_discovery,
             // Error with discovering the service.
             // Indicate the error to the registered user application.
             discovery_error_evt_trigger(p_db_discovery, err_code, conn_handle);
-
-            m_pending_user_evts[0].evt.evt_type    = BLE_DB_DISCOVERY_AVAILABLE;
-            m_pending_user_evts[0].evt.conn_handle = conn_handle;
+            discovery_available_evt_trigger(p_db_discovery, false, conn_handle);
+//            m_pending_user_evts[0].evt.evt_type    = BLE_DB_DISCOVERY_AVAILABLE;
+//            m_pending_user_evts[0].evt.conn_handle = conn_handle;
 
             return;
         }
@@ -296,8 +317,9 @@ static void on_srv_disc_completion(ble_db_discovery_t * p_db_discovery,
     {
         // No more service discovery is needed.
         p_db_discovery->discovery_in_progress  = false;
-        m_pending_user_evts[0].evt.evt_type    = BLE_DB_DISCOVERY_AVAILABLE;
-        m_pending_user_evts[0].evt.conn_handle = conn_handle;
+        discovery_available_evt_trigger(p_db_discovery, false, conn_handle);
+        //        m_pending_user_evts[0].evt.evt_type    = BLE_DB_DISCOVERY_AVAILABLE;
+//        m_pending_user_evts[0].evt.conn_handle = conn_handle;
     }
 }
 
@@ -569,9 +591,9 @@ static void on_primary_srv_discovery_rsp(ble_db_discovery_t       * p_db_discove
             // Error with discovering the service.
             // Indicate the error to the registered user application.
             discovery_error_evt_trigger(p_db_discovery, err_code, p_ble_gattc_evt->conn_handle);
-
-            m_pending_user_evts[0].evt.evt_type    = BLE_DB_DISCOVERY_AVAILABLE;
-            m_pending_user_evts[0].evt.conn_handle = p_ble_gattc_evt->conn_handle;
+            discovery_available_evt_trigger(p_db_discovery, false, p_ble_gattc_evt->conn_handle);
+//            m_pending_user_evts[0].evt.evt_type    = BLE_DB_DISCOVERY_AVAILABLE;
+//            m_pending_user_evts[0].evt.conn_handle = p_ble_gattc_evt->conn_handle;
         }
 //        else on_srv_disc_completion(p_db_discovery, p_ble_gattc_evt->conn_handle);
     }
@@ -673,9 +695,9 @@ static void on_characteristic_discovery_rsp(ble_db_discovery_t       * p_db_disc
                 p_db_discovery->discovery_in_progress = false;
 
                 discovery_error_evt_trigger(p_db_discovery, err_code, p_ble_gattc_evt->conn_handle);
-
-                m_pending_user_evts[0].evt.evt_type    = BLE_DB_DISCOVERY_AVAILABLE;
-                m_pending_user_evts[0].evt.conn_handle = p_ble_gattc_evt->conn_handle;
+                discovery_available_evt_trigger(p_db_discovery, false, p_ble_gattc_evt->conn_handle);
+//                m_pending_user_evts[0].evt.evt_type    = BLE_DB_DISCOVERY_AVAILABLE;
+//                m_pending_user_evts[0].evt.conn_handle = p_ble_gattc_evt->conn_handle;
 
                 return;
             }
@@ -703,9 +725,9 @@ static void on_characteristic_discovery_rsp(ble_db_discovery_t       * p_db_disc
             p_db_discovery->discovery_in_progress = false;
 
             discovery_error_evt_trigger(p_db_discovery, err_code, p_ble_gattc_evt->conn_handle);
-
-            m_pending_user_evts[0].evt.evt_type    = BLE_DB_DISCOVERY_AVAILABLE;
-            m_pending_user_evts[0].evt.conn_handle = p_ble_gattc_evt->conn_handle;
+            discovery_available_evt_trigger(p_db_discovery, false, p_ble_gattc_evt->conn_handle);
+//            m_pending_user_evts[0].evt.evt_type    = BLE_DB_DISCOVERY_AVAILABLE;
+//            m_pending_user_evts[0].evt.conn_handle = p_ble_gattc_evt->conn_handle;
 
             return;
         }
@@ -816,9 +838,9 @@ static void on_descriptor_discovery_rsp(ble_db_discovery_t * const    p_db_disco
             // Error with discovering the service.
             // Indicate the error to the registered user application.
             discovery_error_evt_trigger(p_db_discovery, err_code, p_ble_gattc_evt->conn_handle);
-
-            m_pending_user_evts[0].evt.evt_type    = BLE_DB_DISCOVERY_AVAILABLE;
-            m_pending_user_evts[0].evt.conn_handle = p_ble_gattc_evt->conn_handle;
+            discovery_available_evt_trigger(p_db_discovery, false, p_ble_gattc_evt->conn_handle);
+//            m_pending_user_evts[0].evt.evt_type    = BLE_DB_DISCOVERY_AVAILABLE;
+//            m_pending_user_evts[0].evt.conn_handle = p_ble_gattc_evt->conn_handle;
 
             return;
         }

@@ -98,11 +98,14 @@ NRF_SDH_BLE_OBSERVERS(_name ## _obs,                     \
                       BLE_NUS_C_BLE_OBSERVER_PRIO,       \
                       ble_nus_c_on_ble_evt, &_name, _cnt)
 
-#define NUS_BASE_UUID                   {{0x9E, 0xCA, 0xDC, 0x24, 0x0E, 0xE5, 0xA9, 0xE0, 0x93, 0xF3, 0xA3, 0xB5, 0x00, 0x00, 0x40, 0x6E}} /**< Used vendor specific UUID. */
+#define HEARABLES_BASE_UUID                   {{0xE2, 0x44, 0xE4, 0x22, 0xBA, 0xA8, 0x64, 0x80, 0xA4, 0x46, 0x0C, 0x9A, 0x00, 0x00, 0xD6, 0x8E}}; /**< Hearables vendor specific UUID. */
 
-#define BLE_UUID_NUS_SERVICE            0x0001                      /**< The UUID of the Nordic UART Service. */
-#define BLE_UUID_NUS_RX_CHARACTERISTIC  0x0002                      /**< The UUID of the RX Characteristic. */
-#define BLE_UUID_NUS_TX_CHARACTERISTIC  0x0003                      /**< The UUID of the TX Characteristic. */
+#define BLE_UUID_EEG_NUS_SERVICE            0xECE2                      /**< The UUID of the Nordic UART Service. */
+#define BLE_UUID_PPG_NUS_SERVICE            0xC19f                      /**< The UUID of the Nordic UART Service. */
+#define BLE_UUID_NUS_EEG_RX_CHARACTERISTIC  0x2208                      /**< The UUID of the RX Characteristic. */
+#define BLE_UUID_NUS_EEG_TX_CHARACTERISTIC  0xF2B4                      /**< The UUID of the TX Characteristic. */
+#define BLE_UUID_NUS_PPG_RX_CHARACTERISTIC  0x8748                      /**< The UUID of the RX Characteristic. */
+#define BLE_UUID_NUS_PPG_TX_CHARACTERISTIC  0x5A4D                      /**< The UUID of the TX Characteristic. */
 
 #define OPCODE_LENGTH 1
 #define HANDLE_LENGTH 2
@@ -119,7 +122,8 @@ NRF_SDH_BLE_OBSERVERS(_name ## _obs,                     \
 /**@brief NUS Client event type. */
 typedef enum
 {
-    BLE_NUS_C_EVT_DISCOVERY_COMPLETE,   /**< Event indicating that the NUS service and its characteristics was found. */
+	BLE_NUS_C_EVT_DISCOVERY_AVAILABLE,	/**< Event indicating that a service and its characteristics was found. */
+    BLE_NUS_C_EVT_DISCOVERY_COMPLETE,   /**< Event indicating that all the services and handles were found. */
     BLE_NUS_C_EVT_NUS_TX_EVT,           /**< Event indicating that the central has received something from a peer. */
     BLE_NUS_C_EVT_DISCONNECTED          /**< Event indicating that the NUS server has disconnected. */
 } ble_nus_c_evt_type_t;
@@ -127,9 +131,12 @@ typedef enum
 /**@brief Handles on the connected peer device needed to interact with it. */
 typedef struct
 {
-    uint16_t nus_tx_handle;      /**< Handle of the NUS TX characteristic as provided by a discovery. */
-    uint16_t nus_tx_cccd_handle; /**< Handle of the CCCD of the NUS TX characteristic as provided by a discovery. */
-    uint16_t nus_rx_handle;      /**< Handle of the NUS RX characteristic as provided by a discovery. */
+    uint16_t nus_eeg_tx_handle;      /**< Handle of the NUS TX characteristic as provided by a discovery. */
+    uint16_t nus_eeg_tx_cccd_handle; /**< Handle of the CCCD of the NUS TX characteristic as provided by a discovery. */
+    uint16_t nus_eeg_rx_handle;      /**< Handle of the NUS RX characteristic as provided by a discovery. */
+    uint16_t nus_ppg_tx_handle;      /**< Handle of the NUS TX characteristic as provided by a discovery. */
+    uint16_t nus_ppg_tx_cccd_handle; /**< Handle of the CCCD of the NUS TX characteristic as provided by a discovery. */
+    uint16_t nus_ppg_rx_handle;      /**< Handle of the NUS RX characteristic as provided by a discovery. */
 } ble_nus_c_handles_t;
 
 /**@brief Structure containing the NUS event data received from the peer. */
@@ -140,6 +147,7 @@ typedef struct
     uint16_t             max_data_len;
     uint8_t            * p_data;
     uint8_t              data_len;
+    uint16_t           srv_uuid;
     ble_nus_c_handles_t  handles;     /**< Handles on which the Nordic Uart service characteristics was discovered on the peer device. This will be filled if the evt_type is @ref BLE_NUS_C_EVT_DISCOVERY_COMPLETE.*/
 } ble_nus_c_evt_t;
 
@@ -225,7 +233,7 @@ void ble_nus_c_on_ble_evt(ble_evt_t const * p_ble_evt, void * p_context);
  *                      Otherwise, an error code is returned. This function propagates the error
  *                      code returned by the SoftDevice API @ref sd_ble_gattc_write.
  */
-uint32_t ble_nus_c_tx_notif_enable(ble_nus_c_t * p_ble_nus_c);
+uint32_t ble_nus_c_tx_notif_enable(ble_nus_c_t * p_ble_nus_c,uint16_t * char_handle);
 
 
 /**@brief Function for sending a string to the server.
@@ -260,6 +268,7 @@ uint32_t ble_nus_c_string_send(ble_nus_c_t * p_ble_nus_c, uint8_t * p_string, ui
  */
 uint32_t ble_nus_c_handles_assign(ble_nus_c_t *               p_ble_nus_c,
                                   uint16_t                    conn_handle,
+								  uint16_t                    srv_uuid,
                                   ble_nus_c_handles_t const * p_peer_handles);
 
 

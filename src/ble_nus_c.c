@@ -61,21 +61,31 @@ void ble_nus_c_on_db_disc_evt(ble_nus_c_t * p_ble_nus_c, ble_db_discovery_evt_t 
 
     // Check if the NUS was discovered.
     if (    (p_evt->evt_type == BLE_DB_DISCOVERY_COMPLETE)
-        &&  (p_evt->params.discovered_db.srv_uuid.uuid == BLE_UUID_NUS_SERVICE)
+        &&  ((p_evt->params.discovered_db.srv_uuid.uuid == BLE_UUID_EEG_NUS_SERVICE)
+        		|| (p_evt->params.discovered_db.srv_uuid.uuid == BLE_UUID_PPG_NUS_SERVICE))
         &&  (p_evt->params.discovered_db.srv_uuid.type == p_ble_nus_c->uuid_type))
     {
         for (uint32_t i = 0; i < p_evt->params.discovered_db.char_count; i++)
         {
             switch (p_chars[i].characteristic.uuid.uuid)
             {
-                case BLE_UUID_NUS_RX_CHARACTERISTIC:
-                    nus_c_evt.handles.nus_rx_handle = p_chars[i].characteristic.handle_value;
+                case BLE_UUID_NUS_EEG_RX_CHARACTERISTIC:
+                    nus_c_evt.handles.nus_eeg_rx_handle = p_chars[i].characteristic.handle_value;
                     break;
 
-                case BLE_UUID_NUS_TX_CHARACTERISTIC:
-                    nus_c_evt.handles.nus_tx_handle = p_chars[i].characteristic.handle_value;
-                    nus_c_evt.handles.nus_tx_cccd_handle = p_chars[i].cccd_handle;
+                case BLE_UUID_NUS_EEG_TX_CHARACTERISTIC:
+                    nus_c_evt.handles.nus_eeg_tx_handle = p_chars[i].characteristic.handle_value;
+                    nus_c_evt.handles.nus_eeg_tx_cccd_handle = p_chars[i].cccd_handle;
                     break;
+
+                case BLE_UUID_NUS_PPG_RX_CHARACTERISTIC:
+					nus_c_evt.handles.nus_ppg_rx_handle = p_chars[i].characteristic.handle_value;
+					break;
+
+                case BLE_UUID_NUS_PPG_TX_CHARACTERISTIC:
+					nus_c_evt.handles.nus_ppg_tx_handle = p_chars[i].characteristic.handle_value;
+					nus_c_evt.handles.nus_ppg_tx_cccd_handle = p_chars[i].cccd_handle;
+					break;
 
                 default:
                     break;
@@ -83,10 +93,17 @@ void ble_nus_c_on_db_disc_evt(ble_nus_c_t * p_ble_nus_c, ble_db_discovery_evt_t 
         }
         if (p_ble_nus_c->evt_handler != NULL)
         {
+        	nus_c_evt.srv_uuid = p_evt->params.discovered_db.srv_uuid.uuid;
             nus_c_evt.conn_handle = p_evt->conn_handle;
             nus_c_evt.evt_type    = BLE_NUS_C_EVT_DISCOVERY_COMPLETE;
             p_ble_nus_c->evt_handler(p_ble_nus_c, &nus_c_evt);
         }
+    }
+    else if (p_evt->evt_type == BLE_DB_DISCOVERY_AVAILABLE)
+    {
+    	nus_c_evt.evt_type    = BLE_NUS_C_EVT_DISCOVERY_AVAILABLE;
+    	nus_c_evt.conn_handle = p_evt->conn_handle;
+    	p_ble_nus_c->evt_handler(p_ble_nus_c, &nus_c_evt);
     }
 }
 
@@ -103,8 +120,8 @@ void ble_nus_c_on_db_disc_evt(ble_nus_c_t * p_ble_nus_c, ble_db_discovery_evt_t 
 static void on_hvx(ble_nus_c_t * p_ble_nus_c, ble_evt_t const * p_ble_evt)
 {
     // HVX can only occur from client sending.
-    if (   (p_ble_nus_c->handles.nus_tx_handle != BLE_GATT_HANDLE_INVALID)
-        && (p_ble_evt->evt.gattc_evt.params.hvx.handle == p_ble_nus_c->handles.nus_tx_handle)
+    if (   (p_ble_nus_c->handles.nus_eeg_tx_handle != BLE_GATT_HANDLE_INVALID)
+        && (p_ble_evt->evt.gattc_evt.params.hvx.handle == p_ble_nus_c->handles.nus_eeg_tx_handle)
         && (p_ble_nus_c->evt_handler != NULL))
     {
         ble_nus_c_evt_t ble_nus_c_evt;
@@ -121,24 +138,34 @@ static void on_hvx(ble_nus_c_t * p_ble_nus_c, ble_evt_t const * p_ble_evt)
 uint32_t ble_nus_c_init(ble_nus_c_t * p_ble_nus_c, ble_nus_c_init_t * p_ble_nus_c_init)
 {
     uint32_t      err_code;
-    ble_uuid_t    uart_uuid;
-    ble_uuid128_t nus_base_uuid = NUS_BASE_UUID;
+    ble_uuid_t    eeg_uuid,ppg_uuid;
+    ble_uuid128_t nus_base_uuid = HEARABLES_BASE_UUID;
 
     VERIFY_PARAM_NOT_NULL(p_ble_nus_c);
     VERIFY_PARAM_NOT_NULL(p_ble_nus_c_init);
 
     err_code = sd_ble_uuid_vs_add(&nus_base_uuid, &p_ble_nus_c->uuid_type);
     VERIFY_SUCCESS(err_code);
+    err_code = sd_ble_uuid_vs_add(&nus_base_uuid, &p_ble_nus_c->uuid_type);
+	VERIFY_SUCCESS(err_code);
 
-    uart_uuid.type = p_ble_nus_c->uuid_type;
-    uart_uuid.uuid = BLE_UUID_NUS_SERVICE;
+    eeg_uuid.type = p_ble_nus_c->uuid_type;
+    eeg_uuid.uuid = BLE_UUID_EEG_NUS_SERVICE;
+    ppg_uuid.type = p_ble_nus_c->uuid_type;
+    ppg_uuid.uuid = BLE_UUID_PPG_NUS_SERVICE;
 
     p_ble_nus_c->conn_handle           = BLE_CONN_HANDLE_INVALID;
     p_ble_nus_c->evt_handler           = p_ble_nus_c_init->evt_handler;
-    p_ble_nus_c->handles.nus_tx_handle = BLE_GATT_HANDLE_INVALID;
-    p_ble_nus_c->handles.nus_rx_handle = BLE_GATT_HANDLE_INVALID;
+    p_ble_nus_c->handles.nus_eeg_tx_handle = BLE_GATT_HANDLE_INVALID;
+    p_ble_nus_c->handles.nus_eeg_rx_handle = BLE_GATT_HANDLE_INVALID;
+    p_ble_nus_c->handles.nus_ppg_tx_handle = BLE_GATT_HANDLE_INVALID;
+    p_ble_nus_c->handles.nus_ppg_rx_handle = BLE_GATT_HANDLE_INVALID;
 
-    return ble_db_discovery_evt_register(&uart_uuid);
+    err_code = ble_db_discovery_evt_register(&eeg_uuid);
+    err_code = ble_db_discovery_evt_register(&ppg_uuid);
+
+
+    return err_code;
 }
 
 void ble_nus_c_on_ble_evt(ble_evt_t const * p_ble_evt, void * p_context)
@@ -204,17 +231,17 @@ static uint32_t cccd_configure(uint16_t conn_handle, uint16_t cccd_handle, bool 
 }
 
 
-uint32_t ble_nus_c_tx_notif_enable(ble_nus_c_t * p_ble_nus_c)
+uint32_t ble_nus_c_tx_notif_enable(ble_nus_c_t * p_ble_nus_c, uint16_t * char_handle)
 {
     VERIFY_PARAM_NOT_NULL(p_ble_nus_c);
 
     if ( (p_ble_nus_c->conn_handle == BLE_CONN_HANDLE_INVALID)
-       ||(p_ble_nus_c->handles.nus_tx_cccd_handle == BLE_GATT_HANDLE_INVALID)
+       ||((*char_handle) == BLE_GATT_HANDLE_INVALID)
        )
     {
         return NRF_ERROR_INVALID_STATE;
     }
-    return cccd_configure(p_ble_nus_c->conn_handle,p_ble_nus_c->handles.nus_tx_cccd_handle, true);
+    return cccd_configure(p_ble_nus_c->conn_handle,*char_handle, true);
 }
 
 
@@ -237,7 +264,7 @@ uint32_t ble_nus_c_string_send(ble_nus_c_t * p_ble_nus_c, uint8_t * p_string, ui
     {
         .write_op = BLE_GATT_OP_WRITE_CMD,
         .flags    = BLE_GATT_EXEC_WRITE_FLAG_PREPARED_WRITE,
-        .handle   = p_ble_nus_c->handles.nus_rx_handle,
+        .handle   = p_ble_nus_c->handles.nus_eeg_rx_handle,
         .offset   = 0,
         .len      = length,
         .p_value  = p_string
@@ -249,6 +276,7 @@ uint32_t ble_nus_c_string_send(ble_nus_c_t * p_ble_nus_c, uint8_t * p_string, ui
 
 uint32_t ble_nus_c_handles_assign(ble_nus_c_t               * p_ble_nus,
                                   uint16_t                    conn_handle,
+								  uint16_t                    srv_uuid,
                                   ble_nus_c_handles_t const * p_peer_handles)
 {
     VERIFY_PARAM_NOT_NULL(p_ble_nus);
@@ -256,9 +284,18 @@ uint32_t ble_nus_c_handles_assign(ble_nus_c_t               * p_ble_nus,
     p_ble_nus->conn_handle = conn_handle;
     if (p_peer_handles != NULL)
     {
-        p_ble_nus->handles.nus_tx_cccd_handle = p_peer_handles->nus_tx_cccd_handle;
-        p_ble_nus->handles.nus_tx_handle      = p_peer_handles->nus_tx_handle;
-        p_ble_nus->handles.nus_rx_handle      = p_peer_handles->nus_rx_handle;
+    	if (srv_uuid == BLE_UUID_EEG_NUS_SERVICE)
+    	{
+        p_ble_nus->handles.nus_eeg_tx_cccd_handle = p_peer_handles->nus_eeg_tx_cccd_handle;
+        p_ble_nus->handles.nus_eeg_tx_handle      = p_peer_handles->nus_eeg_tx_handle;
+        p_ble_nus->handles.nus_eeg_rx_handle      = p_peer_handles->nus_eeg_rx_handle;
+    	}
+    	else if (srv_uuid == BLE_UUID_PPG_NUS_SERVICE)
+    	{
+			p_ble_nus->handles.nus_ppg_tx_cccd_handle = p_peer_handles->nus_ppg_tx_cccd_handle;
+			p_ble_nus->handles.nus_ppg_tx_handle      = p_peer_handles->nus_ppg_tx_handle;
+			p_ble_nus->handles.nus_ppg_rx_handle      = p_peer_handles->nus_eeg_rx_handle;
+		}
     }
     return NRF_SUCCESS;
 }
