@@ -331,7 +331,7 @@ static void ble_nus_c_evt_handler(ble_nus_c_t * p_ble_nus_c, ble_nus_c_evt_t con
 			if (p_ble_nus_c->handles.nus_eeg_rx_handle
 					&& p_ble_nus_c->handles.nus_eeg_tx_handle
 					&& p_ble_nus_c->handles.nus_eeg_tx_cccd_handle
-//					&& p_ble_nus_c->handles.nus_ppg_rx_handle
+					&& p_ble_nus_c->handles.nus_ppg_rx_handle
 					&& p_ble_nus_c->handles.nus_ppg_tx_handle
 					&& p_ble_nus_c->handles.nus_ppg_tx_cccd_handle
 			)
