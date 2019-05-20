@@ -294,7 +294,7 @@ uint32_t ble_nus_c_handles_assign(ble_nus_c_t               * p_ble_nus,
     	{
 			p_ble_nus->handles.nus_ppg_tx_cccd_handle = p_peer_handles->nus_ppg_tx_cccd_handle;
 			p_ble_nus->handles.nus_ppg_tx_handle      = p_peer_handles->nus_ppg_tx_handle;
-			p_ble_nus->handles.nus_ppg_rx_handle      = p_peer_handles->nus_eeg_rx_handle;
+			p_ble_nus->handles.nus_ppg_rx_handle      = p_peer_handles->nus_ppg_rx_handle;
 		}
     }
     return NRF_SUCCESS;
