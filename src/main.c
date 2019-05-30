@@ -67,13 +67,14 @@
 #define APP_BLE_OBSERVER_PRIO   3                                       /**< BLE observer priority of the application. There is no need to modify this value. */
 
 //TODO Change this?
-#define UART_TX_BUF_SIZE        2048                                     /**< UART TX buffer size. */
+#define UART_TX_BUF_SIZE        8192                                     /**< UART TX buffer size. */
 #define UART_RX_BUF_SIZE        2048                                    /**< UART RX buffer size. */
 
 #define NUS_SERVICE_UUID_TYPE   BLE_UUID_TYPE_VENDOR_BEGIN              /**< UUID type for the Nordic UART Service (vendor specific). */
 
-#define ECHOBACK_BLE_UART_DATA  1                                       /**< Echo the UART data that is received over the Nordic UART Service (NUS) back to the sender. */
+#define ECHOBACK_BLE_UART_DATA  0                                       /**< Echo the UART data that is received over the Nordic UART Service (NUS) back to the sender. */
 
+//#define CONNECTED_MESSAGE "Connected to device with Hearable EEG & PPG Service."
 
 //TODO Change this?
 BLE_NUS_C_DEF(m_ble_nus_c);                                             /**< BLE Nordic UART Service (NUS) client instance. */
@@ -94,6 +95,21 @@ static uint16_t m_ble_nus_max_data_len = BLE_GATT_ATT_MTU_DEFAULT - OPCODE_LENGT
 static char const m_target_periph_name[] = "Hearable";
 #define EEG_PREFIX "EEG "
 #define PPG_PREFIX "PPG "
+
+#define EEG_BUFFER_COUNT 52
+#define PPG_BUFFER_COUNT 4
+
+#define BUFFER_LENGTH 256
+
+uint8_t eeg_buff[EEG_BUFFER_COUNT][BUFFER_LENGTH] ={0};
+uint8_t ppg_buff[PPG_BUFFER_COUNT][BUFFER_LENGTH] ={0};
+static uint8_t volatile eeg_idx =0;
+static uint8_t volatile ppg_idx =0;
+
+static uint8_t prev_eeg_idx=0;
+static uint8_t prev_ppg_idx=0;
+
+static uint8_t BLE_connected=0;
 
 /**@brief Function for handling asserts in the SoftDevice.
  *
@@ -132,7 +148,7 @@ static void scan_start(void)
 static void scan_evt_handler(scan_evt_t const * p_scan_evt)
 {
     ret_code_t err_code;
-    NRF_LOG_INFO("Scan event: %d",p_scan_evt->scan_evt_id);
+    NRF_LOG_DEBUG("Scan event: %d",p_scan_evt->scan_evt_id);
     switch(p_scan_evt->scan_evt_id)
     {
          case NRF_BLE_SCAN_EVT_CONNECTING_ERROR:
@@ -323,7 +339,7 @@ void uart_event_handle(app_uart_evt_t * p_event)
 static void ble_nus_c_evt_handler(ble_nus_c_t * p_ble_nus_c, ble_nus_c_evt_t const * p_ble_nus_evt)
 {
     ret_code_t err_code;
-
+    int i,j;
     switch (p_ble_nus_evt->evt_type)
     {
     	case BLE_NUS_C_EVT_DISCOVERY_AVAILABLE:
@@ -336,11 +352,15 @@ static void ble_nus_c_evt_handler(ble_nus_c_t * p_ble_nus_c, ble_nus_c_evt_t con
 					&& p_ble_nus_c->handles.nus_ppg_tx_cccd_handle
 			)
 			{
-				err_code = ble_nus_c_tx_notif_enable(p_ble_nus_c,&(p_ble_nus_c->handles.nus_ppg_tx_cccd_handle));
-				APP_ERROR_CHECK(err_code);
-				err_code = ble_nus_c_tx_notif_enable(p_ble_nus_c,&(p_ble_nus_c->handles.nus_eeg_tx_cccd_handle));
-				APP_ERROR_CHECK(err_code);
-				NRF_LOG_INFO("Connected to device with Hearable EEG & PPG Service.");
+				if (!BLE_connected)
+				{
+					err_code = ble_nus_c_tx_notif_enable(p_ble_nus_c,&(p_ble_nus_c->handles.nus_ppg_tx_cccd_handle));
+					APP_ERROR_CHECK(err_code);
+					err_code = ble_nus_c_tx_notif_enable(p_ble_nus_c,&(p_ble_nus_c->handles.nus_eeg_tx_cccd_handle));
+					APP_ERROR_CHECK(err_code);
+					printf("Connected to device with Hearable EEG & PPG Service.");
+					BLE_connected=1;
+				}
 			}
 			else
 			{
@@ -356,17 +376,24 @@ static void ble_nus_c_evt_handler(ble_nus_c_t * p_ble_nus_c, ble_nus_c_evt_t con
 			break;
 
         case BLE_NUS_C_EVT_NUS_EEG_TX_EVT:
-        	ble_nus_chars_received_uart_print((const uint8_t *) EEG_PREFIX,strlen(EEG_PREFIX));
-            ble_nus_chars_received_uart_print(p_ble_nus_evt->p_data, p_ble_nus_evt->data_len);
-            break;
+//        	ble_nus_chars_received_uart_print((const uint8_t *) EEG_PREFIX,strlen(EEG_PREFIX));
+        	for (i=0;i<p_ble_nus_evt->data_len;i++) eeg_buff[eeg_idx][i+4] = * (p_ble_nus_evt->p_data +i);
+        	NRF_LOG_DEBUG("EEG length: %d, buffer %d", p_ble_nus_evt->data_len, eeg_idx);
+        	if (((eeg_idx+1) % EEG_BUFFER_COUNT) == prev_eeg_idx) NRF_LOG_ERROR("EEG data lost");
+        	eeg_idx = (eeg_idx+1) % EEG_BUFFER_COUNT;
+        	break;
 
         case BLE_NUS_C_EVT_NUS_PPG_TX_EVT:
-        	ble_nus_chars_received_uart_print((const uint8_t *) PPG_PREFIX,strlen(PPG_PREFIX));
-        	ble_nus_chars_received_uart_print(p_ble_nus_evt->p_data, p_ble_nus_evt->data_len);
-            break;
+//        	ble_nus_chars_received_uart_print((const uint8_t *) PPG_PREFIX,strlen(PPG_PREFIX));
+        	for (j=0;j<p_ble_nus_evt->data_len;j++) ppg_buff[ppg_idx][j+4] = * (p_ble_nus_evt->p_data +j);
+        	NRF_LOG_DEBUG("PPG length: %d, buffer %d", p_ble_nus_evt->data_len,ppg_idx );
+        	if (((ppg_idx+1) % PPG_BUFFER_COUNT) == prev_ppg_idx) NRF_LOG_ERROR("PPG data lost");
+        	ppg_idx = (ppg_idx+1) % PPG_BUFFER_COUNT;
+        	break;
 
         case BLE_NUS_C_EVT_DISCONNECTED:
             NRF_LOG_INFO("Disconnected.");
+            BLE_connected=0;
             scan_start();
             break;
     }
@@ -414,7 +441,7 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
     ret_code_t            err_code;
     ble_gap_evt_t const * p_gap_evt = &p_ble_evt->evt.gap_evt;
 
-    NRF_LOG_INFO("BLE_EVT: 0x%x, ",p_ble_evt->header.evt_id);
+    NRF_LOG_DEBUG("BLE_EVT: 0x%x, ",p_ble_evt->header.evt_id);
     switch (p_ble_evt->header.evt_id)
     {
         case BLE_GAP_EVT_CONNECTED:
@@ -426,6 +453,13 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
             err_code = bsp_indication_set(BSP_INDICATE_CONNECTED);
             APP_ERROR_CHECK(err_code);
             NRF_LOG_INFO("Connected");
+            ble_gap_phys_t const desired_phys =
+			{
+					.rx_phys = BLE_GAP_PHY_2MBPS,
+					.tx_phys = BLE_GAP_PHY_2MBPS,
+			};
+            err_code = sd_ble_gap_phy_update(p_gap_evt->conn_handle,&desired_phys);
+            APP_ERROR_CHECK(err_code);
             // start discovery of services. The NUS Client waits for a discovery result
             err_code = ble_db_discovery_start(&m_db_disc, p_ble_evt->evt.gap_evt.conn_handle);
             APP_ERROR_CHECK(err_code);
@@ -453,6 +487,11 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
 
         case BLE_GAP_EVT_CONN_PARAM_UPDATE_REQUEST:
             // Accepting parameters requested by peer.
+        	NRF_LOG_INFO("Updating connection parameters, min: %d, max:%d, latency: %d, timeout: %d", \
+        			p_gap_evt->params.conn_param_update_request.conn_params.min_conn_interval, \
+					p_gap_evt->params.conn_param_update_request.conn_params.max_conn_interval, \
+					p_gap_evt->params.conn_param_update_request.conn_params.slave_latency, \
+					p_gap_evt->params.conn_param_update_request.conn_params.conn_sup_timeout);
             err_code = sd_ble_gap_conn_param_update(p_gap_evt->conn_handle,
                                                     &p_gap_evt->params.conn_param_update_request.conn_params);
             APP_ERROR_CHECK(err_code);
@@ -460,11 +499,11 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
 
         case BLE_GAP_EVT_PHY_UPDATE_REQUEST:
         {
-            NRF_LOG_DEBUG("PHY update request.");
+            NRF_LOG_INFO("PHY update request.");
             ble_gap_phys_t const phys =
             {
-                .rx_phys = BLE_GAP_PHY_AUTO,
-                .tx_phys = BLE_GAP_PHY_AUTO,
+                    .rx_phys = BLE_GAP_PHY_2MBPS,
+                    .tx_phys = BLE_GAP_PHY_2MBPS,
             };
             err_code = sd_ble_gap_phy_update(p_ble_evt->evt.gap_evt.conn_handle, &phys);
             APP_ERROR_CHECK(err_code);
@@ -541,6 +580,7 @@ void gatt_init(void)
 
     err_code = nrf_ble_gatt_att_mtu_central_set(&m_gatt, NRF_SDH_BLE_GATT_MAX_MTU_SIZE);
     APP_ERROR_CHECK(err_code);
+
 }
 
 
@@ -670,7 +710,7 @@ static void idle_state_handle(void)
 {
     if (NRF_LOG_PROCESS() == false)
     {
-        nrf_pwr_mgmt_run();
+//        nrf_pwr_mgmt_run();
     }
 }
 
@@ -688,6 +728,25 @@ int main(void)
     gatt_init();
     nus_c_init();
     scan_init();
+    int i;
+
+
+    for (i=0;i<EEG_BUFFER_COUNT;i++)
+    {
+		eeg_buff[i][0]='E';
+		eeg_buff[i][1]='E';
+		eeg_buff[i][2]='G';
+		eeg_buff[i][3]='_';
+    }
+    for (i=0;i<PPG_BUFFER_COUNT;i++)
+	{
+		ppg_buff[i][0]='P';
+		ppg_buff[i][1]='P';
+		ppg_buff[i][2]='G';
+		ppg_buff[i][3]='_';
+	}
+
+
 
     // Start execution.
     printf("BLE UART central example started.\r\n");
@@ -697,6 +756,16 @@ int main(void)
     // Enter main loop.
     for (;;)
     {
+    	if(prev_eeg_idx != eeg_idx)
+    	{
+    		ble_nus_chars_received_uart_print(& eeg_buff[prev_eeg_idx][0], BUFFER_LENGTH);
+    		prev_eeg_idx = (prev_eeg_idx+1) % EEG_BUFFER_COUNT;
+    	}
+    	if(prev_ppg_idx != ppg_idx)
+		{
+			ble_nus_chars_received_uart_print(& ppg_buff[prev_ppg_idx][0], BUFFER_LENGTH);
+			prev_ppg_idx = (prev_ppg_idx+1) % PPG_BUFFER_COUNT;
+		}
         idle_state_handle();
     }
 }
