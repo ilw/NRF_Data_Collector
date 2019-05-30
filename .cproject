@@ -150,9 +150,9 @@
 	</storageModule>
 	<storageModule moduleId="org.eclipse.cdt.make.core.buildtargets">
 		<buildTargets>
-			<target name="flash nrf52832_xxaa" path="" targetID="org.eclipse.cdt.build.MakeTargetBuilder">
+			<target name="flash nrf52832" path="" targetID="org.eclipse.cdt.build.MakeTargetBuilder">
 				<buildCommand>make</buildCommand>
-				<buildArguments>VERBOSE=1</buildArguments>
+				<buildArguments>VERBOSE=1 PRETTY=1 ABSOLUTE_PATHS=1 -j4</buildArguments>
 				<buildTarget>flash nrf52832_xxaa</buildTarget>
 				<stopOnError>true</stopOnError>
 				<useDefaultCommand>true</useDefaultCommand>
@@ -166,9 +166,9 @@
 				<useDefaultCommand>true</useDefaultCommand>
 				<runAllBuilders>true</runAllBuilders>
 			</target>
-			<target name="build" path="" targetID="org.eclipse.cdt.build.MakeTargetBuilder">
+			<target name="build_nrf52832" path="" targetID="org.eclipse.cdt.build.MakeTargetBuilder">
 				<buildCommand>make</buildCommand>
-				<buildArguments>VERBOSE=1 PRETTY=1 -j4</buildArguments>
+				<buildArguments>VERBOSE=1 PRETTY=1 ABSOLUTE_PATHS=1 -j4</buildArguments>
 				<buildTarget>nrf52832_xxaa</buildTarget>
 				<stopOnError>true</stopOnError>
 				<useDefaultCommand>true</useDefaultCommand>
@@ -186,6 +186,22 @@
 				<buildCommand>make</buildCommand>
 				<buildArguments>VERBOSE=1 PRETTY=1 ABSOLUTE_PATHS=1 -j4</buildArguments>
 				<buildTarget>flash_softdevice</buildTarget>
+				<stopOnError>true</stopOnError>
+				<useDefaultCommand>true</useDefaultCommand>
+				<runAllBuilders>true</runAllBuilders>
+			</target>
+			<target name="build_nrf52840" path="" targetID="org.eclipse.cdt.build.MakeTargetBuilder">
+				<buildCommand>make</buildCommand>
+				<buildArguments>VERBOSE=1 PRETTY=1 ABSOLUTE_PATHS=1 -j4</buildArguments>
+				<buildTarget>nrf52840_xxaa</buildTarget>
+				<stopOnError>true</stopOnError>
+				<useDefaultCommand>true</useDefaultCommand>
+				<runAllBuilders>true</runAllBuilders>
+			</target>
+			<target name="flash nrf52840" path="" targetID="org.eclipse.cdt.build.MakeTargetBuilder">
+				<buildCommand>make</buildCommand>
+				<buildArguments>VERBOSE=1 PRETTY=1 ABSOLUTE_PATHS=1 -j4</buildArguments>
+				<buildTarget>flash nrf52840_xxaa</buildTarget>
 				<stopOnError>true</stopOnError>
 				<useDefaultCommand>true</useDefaultCommand>
 				<runAllBuilders>true</runAllBuilders>
