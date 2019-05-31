@@ -5,12 +5,20 @@ GROUP(-lgcc -lc -lnosys)
 
 MEMORY
 {
-  FLASH (rx) : ORIGIN = 0x26000, LENGTH = 0xda000
+  FLASH (rx) : ORIGIN = 0x26000, LENGTH = 0xca000
   RAM (rwx) :  ORIGIN = 0x20002d68, LENGTH = 0x3d298
+  uicr_bootloader_start_address (r) : ORIGIN = 0x00000FF8, LENGTH = 0x4
 }
 
 SECTIONS
 {
+  . = ALIGN(4);
+  .uicr_bootloader_start_address :
+  {
+    PROVIDE(__start_uicr_bootloader_start_address = .);
+    KEEP(*(SORT(.uicr_bootloader_start_address*)))
+    PROVIDE(__stop_uicr_bootloader_start_address = .);
+  } > uicr_bootloader_start_address
 }
 
 SECTIONS
