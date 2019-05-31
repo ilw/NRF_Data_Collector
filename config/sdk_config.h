@@ -6826,7 +6826,7 @@
 // <268435456=> 1000000 baud 
 
 #ifndef HCI_UART_BAUDRATE
-#define HCI_UART_BAUDRATE 30801920
+#define HCI_UART_BAUDRATE 268435456
 #endif
 
 // <o> HCI_UART_FLOW_CONTROL  - Hardware Flow Control

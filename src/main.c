@@ -42,7 +42,6 @@
 #include <stdbool.h>
 #include "nordic_common.h"
 #include "app_error.h"
-#include "app_uart.h"
 #include "ble_db_discovery.h"
 #include "app_timer.h"
 #include "app_util.h"
@@ -842,7 +841,7 @@ int main(void)
 
 
     // Start execution.
-    printf("BLE UART central example started.\r\n");
+    NRF_LOG_INFO("BLE UART central example started.\r\n");
     NRF_LOG_INFO("BLE UART central example started.");
     scan_start();
 
