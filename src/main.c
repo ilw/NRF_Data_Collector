@@ -68,7 +68,7 @@
 #include "app_usbd_string_desc.h"
 #include "app_usbd_cdc_acm.h"
 #include "app_usbd_serial_num.h"
-
+#include "ringbuf.h"
 
 
 #define ENDLINE_STRING "\r\n"
@@ -137,21 +137,19 @@ static uint16_t m_ble_nus_max_data_len = BLE_GATT_ATT_MTU_DEFAULT - OPCODE_LENGT
 //};
 
 static char const m_target_periph_name[] = "Hearable";
+#define PREFIX_LENGTH 4
 #define EEG_PREFIX "EEG "
 #define PPG_PREFIX "PPG "
 
-#define EEG_BUFFER_COUNT 52
-#define PPG_BUFFER_COUNT 4
+#define RINGBUF_SIZE 16384 //Power of 2!
+#define USB_PACKET_SIZE 2048
 
-#define BUFFER_LENGTH 256
+static uint8_t usbBuffer[2][USB_PACKET_SIZE];
 
-uint8_t eeg_buff[EEG_BUFFER_COUNT][BUFFER_LENGTH] ={0};
-uint8_t ppg_buff[PPG_BUFFER_COUNT][BUFFER_LENGTH] ={0};
-static uint8_t volatile eeg_idx =0;
-static uint8_t volatile ppg_idx =0;
+struct ringbuf eegRing,ppgRing;
+static uint8_t ringBuffer[RINGBUF_SIZE];
+static uint8_t ringBuffer2[RINGBUF_SIZE];
 
-static uint8_t prev_eeg_idx=0;
-static uint8_t prev_ppg_idx=0;
 
 static uint8_t BLE_connected=0;
 
@@ -287,7 +285,8 @@ static void db_disc_handler(ble_db_discovery_evt_t * p_evt)
 static void ble_nus_c_evt_handler(ble_nus_c_t * p_ble_nus_c, ble_nus_c_evt_t const * p_ble_nus_evt)
 {
     ret_code_t err_code;
-    int i,j;
+    int i;
+    uint16_t count=0;
     switch (p_ble_nus_evt->evt_type)
     {
     	case BLE_NUS_C_EVT_DISCOVERY_AVAILABLE:
@@ -324,19 +323,25 @@ static void ble_nus_c_evt_handler(ble_nus_c_t * p_ble_nus_c, ble_nus_c_evt_t con
 			break;
 
         case BLE_NUS_C_EVT_NUS_EEG_TX_EVT:
-//        	ble_nus_chars_received_uart_print((const uint8_t *) EEG_PREFIX,strlen(EEG_PREFIX));
-        	for (i=0;i<p_ble_nus_evt->data_len;i++) eeg_buff[eeg_idx][i+4] = * (p_ble_nus_evt->p_data +i);
-        	NRF_LOG_DEBUG("EEG length: %d, buffer %d", p_ble_nus_evt->data_len, eeg_idx);
-        	if (((eeg_idx+1) % EEG_BUFFER_COUNT) == prev_eeg_idx) NRF_LOG_ERROR("EEG data lost");
-        	eeg_idx = (eeg_idx+1) % EEG_BUFFER_COUNT;
+        	count =0;
+        	for (i=0;i<p_ble_nus_evt->data_len;i++)
+        		count+= ringbuf_put( &eegRing, *(p_ble_nus_evt->p_data +i)  );
+         	if (count != p_ble_nus_evt->data_len)
+        	{
+        		NRF_LOG_ERROR("EEG data lost");
+        		bsp_indication_set(BSP_INDICATE_RCV_ERROR);
+        	}
         	break;
 
         case BLE_NUS_C_EVT_NUS_PPG_TX_EVT:
-//        	ble_nus_chars_received_uart_print((const uint8_t *) PPG_PREFIX,strlen(PPG_PREFIX));
-        	for (j=0;j<p_ble_nus_evt->data_len;j++) ppg_buff[ppg_idx][j+4] = * (p_ble_nus_evt->p_data +j);
-        	NRF_LOG_DEBUG("PPG length: %d, buffer %d", p_ble_nus_evt->data_len,ppg_idx );
-        	if (((ppg_idx+1) % PPG_BUFFER_COUNT) == prev_ppg_idx) NRF_LOG_ERROR("PPG data lost");
-        	ppg_idx = (ppg_idx+1) % PPG_BUFFER_COUNT;
+        	count =0;
+			for (i=0;i<p_ble_nus_evt->data_len;i++)
+				count+= ringbuf_put(&ppgRing, *(p_ble_nus_evt->p_data +i));
+			if (count != p_ble_nus_evt->data_len)
+			{
+				NRF_LOG_ERROR("PPG data lost");
+				bsp_indication_set(BSP_INDICATE_RCV_ERROR);
+			}
         	break;
 
         case BLE_NUS_C_EVT_DISCONNECTED:
@@ -823,20 +828,25 @@ int main(void)
     APP_ERROR_CHECK(ret);
 
 
-    for (i=0;i<EEG_BUFFER_COUNT;i++)
-    {
-		eeg_buff[i][0]='E';
-		eeg_buff[i][1]='E';
-		eeg_buff[i][2]='G';
-		eeg_buff[i][3]='_';
-    }
-    for (i=0;i<PPG_BUFFER_COUNT;i++)
-	{
-		ppg_buff[i][0]='P';
-		ppg_buff[i][1]='P';
-		ppg_buff[i][2]='G';
-		ppg_buff[i][3]='_';
-	}
+
+    /////////////////////
+    //Ring buffer init
+
+    ringbuf_init (&eegRing, ringBuffer, RINGBUF_SIZE);
+    ringbuf_init (&ppgRing, ringBuffer2, RINGBUF_SIZE);
+
+
+    //TODO Fix this initialisation so that it automatically changes with changes in prefix and prefix length
+    	usbBuffer[0][0]='E';
+    	usbBuffer[0][1]='E';
+    	usbBuffer[0][2]='G';
+    	usbBuffer[0][3]='_';
+
+    	usbBuffer[1][0]='P';
+    	usbBuffer[1][1]='P';
+    	usbBuffer[1][2]='G';
+    	usbBuffer[1][3]='_';
+    ///////////////////////////////////
 
 
 
@@ -849,25 +859,21 @@ int main(void)
     for (;;)
     {
 		while (app_usbd_event_queue_process());
-    	if(prev_eeg_idx != eeg_idx)
-    	{
-    		// ble_nus_chars_received_uart_print(& eeg_buff[prev_eeg_idx][0], BUFFER_LENGTH);
-			// Send data through CDC ACM
-			ret = app_usbd_cdc_acm_write(&m_app_cdc_acm,
-                                                & eeg_buff[prev_eeg_idx][0],
-                                                BUFFER_LENGTH);
-			if(ret != NRF_SUCCESS) NRF_LOG_INFO("CDC ACM unavailable");
-    		prev_eeg_idx = (prev_eeg_idx+1) % EEG_BUFFER_COUNT;
-    	}
-    	if(prev_ppg_idx != ppg_idx)
+
+		while (ringbuf_elements(&eegRing) >= (USB_PACKET_SIZE-PREFIX_LENGTH))
 		{
-			// ble_nus_chars_received_uart_print(& ppg_buff[prev_ppg_idx][0], BUFFER_LENGTH);
-			ret = app_usbd_cdc_acm_write(&m_app_cdc_acm,
-                                                & ppg_buff[prev_ppg_idx][0],
-                                                BUFFER_LENGTH);
+			for (i=0;i<(USB_PACKET_SIZE-PREFIX_LENGTH);i++) 	usbBuffer[0][i+PREFIX_LENGTH] = ringbuf_get(&eegRing);
+			ret = app_usbd_cdc_acm_write(&m_app_cdc_acm, &usbBuffer[0],USB_PACKET_SIZE);
 			if(ret != NRF_SUCCESS) NRF_LOG_INFO("CDC ACM unavailable");
-			prev_ppg_idx = (prev_ppg_idx+1) % PPG_BUFFER_COUNT;
 		}
+
+		while (ringbuf_elements(&ppgRing) >= (USB_PACKET_SIZE -PREFIX_LENGTH))
+		{
+			for (i=0;i<(USB_PACKET_SIZE-PREFIX_LENGTH);i++) 	usbBuffer[1][i+PREFIX_LENGTH] = ringbuf_get(&ppgRing);
+			ret = app_usbd_cdc_acm_write(&m_app_cdc_acm, &usbBuffer[1],USB_PACKET_SIZE);
+			if(ret != NRF_SUCCESS) NRF_LOG_INFO("CDC ACM unavailable");
+		}
+
         idle_state_handle();
     }
 }
