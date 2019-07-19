@@ -1,0 +1,12 @@
+working with nrf52840 dongle
+
+
+use nrf connect - its easier than nrfutil 
+nrfutil dfu usb-serial -pkg app_dfu_package.zip -p COM7 -b 115200
+
+need some way of debugging - should develop on the dk and then transfer is easy (just a few lines in the makefile?)
+
+bootloader adds an extra complication
+
+
+If get into issues with nrf connect (e.g. libusb error) or not recognising it then can reset by pushing the small reset button (not the big one!) while plugged in and it should start flashing red
