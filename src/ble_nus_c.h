@@ -102,10 +102,14 @@ NRF_SDH_BLE_OBSERVERS(_name ## _obs,                     \
 
 #define BLE_UUID_EEG_NUS_SERVICE            0xECE2                      /**< The UUID of the Nordic UART Service. */
 #define BLE_UUID_PPG_NUS_SERVICE            0xC19f                      /**< The UUID of the Nordic UART Service. */
+#define BLE_UUID_ACC_NUS_SERVICE            0x2e2a                      /**< The UUID of the Nordic UART Service. */
+
 #define BLE_UUID_NUS_EEG_RX_CHARACTERISTIC  0x2208                      /**< The UUID of the RX Characteristic. */
 #define BLE_UUID_NUS_EEG_TX_CHARACTERISTIC  0xF2B4                      /**< The UUID of the TX Characteristic. */
 #define BLE_UUID_NUS_PPG_RX_CHARACTERISTIC  0x8748                      /**< The UUID of the RX Characteristic. */
 #define BLE_UUID_NUS_PPG_TX_CHARACTERISTIC  0x5A4D                      /**< The UUID of the TX Characteristic. */
+#define BLE_UUID_NUS_ACC_RX_CHARACTERISTIC  0xE919                      /**< The UUID of the RX Characteristic. */
+#define BLE_UUID_NUS_ACC_TX_CHARACTERISTIC  0x6536                      /**< The UUID of the TX Characteristic. */
 
 #define OPCODE_LENGTH 1
 #define HANDLE_LENGTH 2
@@ -126,6 +130,7 @@ typedef enum
     BLE_NUS_C_EVT_DISCOVERY_COMPLETE,   /**< Event indicating that all the services and handles were found. */
     BLE_NUS_C_EVT_NUS_EEG_TX_EVT,           /**< Event indicating that the central has received EEG data from a peer. */
 	BLE_NUS_C_EVT_NUS_PPG_TX_EVT,           /**< Event indicating that the central has received PPG data from a peer. */
+	BLE_NUS_C_EVT_NUS_ACC_TX_EVT,           /**< Event indicating that the central has received ACC data from a peer. */
     BLE_NUS_C_EVT_DISCONNECTED          /**< Event indicating that the NUS server has disconnected. */
 } ble_nus_c_evt_type_t;
 
@@ -138,6 +143,9 @@ typedef struct
     uint16_t nus_ppg_tx_handle;      /**< Handle of the NUS TX characteristic as provided by a discovery. */
     uint16_t nus_ppg_tx_cccd_handle; /**< Handle of the CCCD of the NUS TX characteristic as provided by a discovery. */
     uint16_t nus_ppg_rx_handle;      /**< Handle of the NUS RX characteristic as provided by a discovery. */
+    uint16_t nus_acc_tx_handle;      /**< Handle of the NUS TX characteristic as provided by a discovery. */
+	uint16_t nus_acc_tx_cccd_handle; /**< Handle of the CCCD of the NUS TX characteristic as provided by a discovery. */
+	uint16_t nus_acc_rx_handle;      /**< Handle of the NUS RX characteristic as provided by a discovery. */
 } ble_nus_c_handles_t;
 
 /**@brief Structure containing the NUS event data received from the peer. */

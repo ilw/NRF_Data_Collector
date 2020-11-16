@@ -159,7 +159,8 @@ void ble_nus_c_on_db_disc_evt(ble_nus_c_t * p_ble_nus_c, ble_db_discovery_evt_t 
     // Check if the NUS was discovered.
     if (    (p_evt->evt_type == BLE_DB_DISCOVERY_COMPLETE)
         &&  ((p_evt->params.discovered_db.srv_uuid.uuid == BLE_UUID_EEG_NUS_SERVICE)
-        		|| (p_evt->params.discovered_db.srv_uuid.uuid == BLE_UUID_PPG_NUS_SERVICE))
+        		|| (p_evt->params.discovered_db.srv_uuid.uuid == BLE_UUID_PPG_NUS_SERVICE)
+				|| (p_evt->params.discovered_db.srv_uuid.uuid == BLE_UUID_ACC_NUS_SERVICE))
         &&  (p_evt->params.discovered_db.srv_uuid.type == p_ble_nus_c->uuid_type))
     {
         for (uint32_t i = 0; i < p_evt->params.discovered_db.char_count; i++)
@@ -184,6 +185,14 @@ void ble_nus_c_on_db_disc_evt(ble_nus_c_t * p_ble_nus_c, ble_db_discovery_evt_t 
 					nus_c_evt.handles.nus_ppg_tx_cccd_handle = p_chars[i].cccd_handle;
 					break;
 
+                case BLE_UUID_NUS_ACC_RX_CHARACTERISTIC:
+					nus_c_evt.handles.nus_acc_rx_handle = p_chars[i].characteristic.handle_value;
+					break;
+
+				case BLE_UUID_NUS_ACC_TX_CHARACTERISTIC:
+					nus_c_evt.handles.nus_acc_tx_handle = p_chars[i].characteristic.handle_value;
+					nus_c_evt.handles.nus_acc_tx_cccd_handle = p_chars[i].cccd_handle;
+					break;
                 default:
                     break;
             }
@@ -243,12 +252,25 @@ static void on_hvx(ble_nus_c_t * p_ble_nus_c, ble_evt_t const * p_ble_evt)
             p_ble_nus_c->evt_handler(p_ble_nus_c, &ble_nus_c_evt);
             NRF_LOG_DEBUG("Client sending PPG data.");
         }
+    else if (   (p_ble_nus_c->handles.nus_acc_tx_handle != BLE_GATT_HANDLE_INVALID)
+			&& (p_ble_evt->evt.gattc_evt.params.hvx.handle == p_ble_nus_c->handles.nus_acc_tx_handle)
+			&& (p_ble_nus_c->evt_handler != NULL))
+		{
+			ble_nus_c_evt_t ble_nus_c_evt;
+
+			ble_nus_c_evt.evt_type = BLE_NUS_C_EVT_NUS_ACC_TX_EVT;
+			ble_nus_c_evt.p_data   = (uint8_t *)p_ble_evt->evt.gattc_evt.params.hvx.data;
+			ble_nus_c_evt.data_len = p_ble_evt->evt.gattc_evt.params.hvx.len;
+
+			p_ble_nus_c->evt_handler(p_ble_nus_c, &ble_nus_c_evt);
+			NRF_LOG_DEBUG("Client sending ACCEL data.");
+		}
 }
 
 uint32_t ble_nus_c_init(ble_nus_c_t * p_ble_nus_c, ble_nus_c_init_t * p_ble_nus_c_init)
 {
     uint32_t      err_code;
-    ble_uuid_t    eeg_uuid,ppg_uuid;
+    ble_uuid_t    eeg_uuid,ppg_uuid, acc_uuid;
     ble_uuid128_t nus_base_uuid = HEARABLES_BASE_UUID;
 
     VERIFY_PARAM_NOT_NULL(p_ble_nus_c);
@@ -263,6 +285,8 @@ uint32_t ble_nus_c_init(ble_nus_c_t * p_ble_nus_c, ble_nus_c_init_t * p_ble_nus_
     eeg_uuid.uuid = BLE_UUID_EEG_NUS_SERVICE;
     ppg_uuid.type = p_ble_nus_c->uuid_type;
     ppg_uuid.uuid = BLE_UUID_PPG_NUS_SERVICE;
+    acc_uuid.type = p_ble_nus_c->uuid_type;
+	acc_uuid.uuid = BLE_UUID_ACC_NUS_SERVICE;
 
     p_ble_nus_c->conn_handle           = BLE_CONN_HANDLE_INVALID;
     p_ble_nus_c->evt_handler           = p_ble_nus_c_init->evt_handler;
@@ -270,10 +294,12 @@ uint32_t ble_nus_c_init(ble_nus_c_t * p_ble_nus_c, ble_nus_c_init_t * p_ble_nus_
     p_ble_nus_c->handles.nus_eeg_rx_handle = BLE_GATT_HANDLE_INVALID;
     p_ble_nus_c->handles.nus_ppg_tx_handle = BLE_GATT_HANDLE_INVALID;
     p_ble_nus_c->handles.nus_ppg_rx_handle = BLE_GATT_HANDLE_INVALID;
+    p_ble_nus_c->handles.nus_acc_tx_handle = BLE_GATT_HANDLE_INVALID;
+	p_ble_nus_c->handles.nus_acc_rx_handle = BLE_GATT_HANDLE_INVALID;
 
     err_code = ble_db_discovery_evt_register(&eeg_uuid);
     err_code = ble_db_discovery_evt_register(&ppg_uuid);
-
+    err_code = ble_db_discovery_evt_register(&acc_uuid);
 
     return err_code;
 }
@@ -415,6 +441,12 @@ uint32_t ble_nus_c_handles_assign(ble_nus_c_t               * p_ble_nus,
 			p_ble_nus->handles.nus_ppg_tx_cccd_handle = p_peer_handles->nus_ppg_tx_cccd_handle;
 			p_ble_nus->handles.nus_ppg_tx_handle      = p_peer_handles->nus_ppg_tx_handle;
 			p_ble_nus->handles.nus_ppg_rx_handle      = p_peer_handles->nus_ppg_rx_handle;
+		}
+    	else if (srv_uuid == BLE_UUID_ACC_NUS_SERVICE)
+		{
+			p_ble_nus->handles.nus_acc_tx_cccd_handle = p_peer_handles->nus_acc_tx_cccd_handle;
+			p_ble_nus->handles.nus_acc_tx_handle      = p_peer_handles->nus_acc_tx_handle;
+			p_ble_nus->handles.nus_acc_rx_handle      = p_peer_handles->nus_acc_rx_handle;
 		}
     }
     return NRF_SUCCESS;

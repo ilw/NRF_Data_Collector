@@ -140,15 +140,17 @@ static char const m_target_periph_name[] = "Hearable";
 #define PREFIX_LENGTH 4
 #define EEG_PREFIX "EEG "
 #define PPG_PREFIX "PPG "
+#define ACC_PREFIX "ACC "
 
 #define RINGBUF_SIZE 16384 //Power of 2!
 #define USB_PACKET_SIZE 2048
 
-static uint8_t usbBuffer[2][USB_PACKET_SIZE];
+static uint8_t usbBuffer[3][USB_PACKET_SIZE];
 
-struct ringbuf eegRing,ppgRing;
+struct ringbuf eegRing,ppgRing,accRing;
 static uint8_t ringBuffer[RINGBUF_SIZE];
 static uint8_t ringBuffer2[RINGBUF_SIZE];
+static uint8_t ringBuffer3[RINGBUF_SIZE];
 
 
 static uint8_t BLE_connected=0;
@@ -297,6 +299,9 @@ static void ble_nus_c_evt_handler(ble_nus_c_t * p_ble_nus_c, ble_nus_c_evt_t con
 					&& p_ble_nus_c->handles.nus_ppg_rx_handle
 					&& p_ble_nus_c->handles.nus_ppg_tx_handle
 					&& p_ble_nus_c->handles.nus_ppg_tx_cccd_handle
+					&& p_ble_nus_c->handles.nus_acc_rx_handle
+					&& p_ble_nus_c->handles.nus_acc_tx_handle
+					&& p_ble_nus_c->handles.nus_acc_tx_cccd_handle
 			)
 			{
 				if (!BLE_connected)
@@ -305,7 +310,9 @@ static void ble_nus_c_evt_handler(ble_nus_c_t * p_ble_nus_c, ble_nus_c_evt_t con
 					APP_ERROR_CHECK(err_code);
 					err_code = ble_nus_c_tx_notif_enable(p_ble_nus_c,&(p_ble_nus_c->handles.nus_eeg_tx_cccd_handle));
 					APP_ERROR_CHECK(err_code);
-					printf("Connected to device with Hearable EEG & PPG Service.");
+					err_code = ble_nus_c_tx_notif_enable(p_ble_nus_c,&(p_ble_nus_c->handles.nus_acc_tx_cccd_handle));
+					APP_ERROR_CHECK(err_code);
+					printf("Connected to device with Hearable EEG & PPG & ACCEL Service.");
 					BLE_connected=1;
 				}
 			}
@@ -343,6 +350,17 @@ static void ble_nus_c_evt_handler(ble_nus_c_t * p_ble_nus_c, ble_nus_c_evt_t con
 				bsp_indication_set(BSP_INDICATE_RCV_ERROR);
 			}
         	break;
+
+        case BLE_NUS_C_EVT_NUS_ACC_TX_EVT:
+			count =0;
+			for (i=0;i<p_ble_nus_evt->data_len;i++)
+				count+= ringbuf_put(&accRing, *(p_ble_nus_evt->p_data +i));
+			if (count != p_ble_nus_evt->data_len)
+			{
+				NRF_LOG_ERROR("ACCEL data lost");
+				bsp_indication_set(BSP_INDICATE_RCV_ERROR);
+			}
+			break;
 
         case BLE_NUS_C_EVT_DISCONNECTED:
             NRF_LOG_INFO("Disconnected.");
@@ -402,6 +420,9 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
             APP_ERROR_CHECK(err_code);
             err_code = ble_nus_c_handles_assign(&m_ble_nus_c, p_ble_evt->evt.gap_evt.conn_handle,BLE_UUID_PPG_NUS_SERVICE, NULL);
             APP_ERROR_CHECK(err_code);
+            err_code = ble_nus_c_handles_assign(&m_ble_nus_c, p_ble_evt->evt.gap_evt.conn_handle,BLE_UUID_ACC_NUS_SERVICE, NULL);
+            APP_ERROR_CHECK(err_code);
+
 
             err_code = bsp_indication_set(BSP_INDICATE_CONNECTED);
             APP_ERROR_CHECK(err_code);
@@ -834,6 +855,7 @@ int main(void)
 
     ringbuf_init (&eegRing, ringBuffer, RINGBUF_SIZE);
     ringbuf_init (&ppgRing, ringBuffer2, RINGBUF_SIZE);
+    ringbuf_init (&accRing, ringBuffer3, RINGBUF_SIZE);
 
 
     //TODO Fix this initialisation so that it automatically changes with changes in prefix and prefix length
@@ -846,6 +868,11 @@ int main(void)
     	usbBuffer[1][1]='P';
     	usbBuffer[1][2]='G';
     	usbBuffer[1][3]='_';
+
+    	usbBuffer[2][0]='A';
+		usbBuffer[2][1]='C';
+		usbBuffer[2][2]='C';
+		usbBuffer[2][3]='_';
     ///////////////////////////////////
 
 
@@ -871,6 +898,13 @@ int main(void)
 		{
 			for (i=0;i<(USB_PACKET_SIZE-PREFIX_LENGTH);i++) 	usbBuffer[1][i+PREFIX_LENGTH] = ringbuf_get(&ppgRing);
 			ret = app_usbd_cdc_acm_write(&m_app_cdc_acm, &usbBuffer[1],USB_PACKET_SIZE);
+			if(ret != NRF_SUCCESS) NRF_LOG_INFO("CDC ACM unavailable");
+		}
+
+		while (ringbuf_elements(&accRing) >= (USB_PACKET_SIZE -PREFIX_LENGTH))
+		{
+			for (i=0;i<(USB_PACKET_SIZE-PREFIX_LENGTH);i++) 	usbBuffer[2][i+PREFIX_LENGTH] = ringbuf_get(&accRing);
+			ret = app_usbd_cdc_acm_write(&m_app_cdc_acm, &usbBuffer[2],USB_PACKET_SIZE);
 			if(ret != NRF_SUCCESS) NRF_LOG_INFO("CDC ACM unavailable");
 		}
 
