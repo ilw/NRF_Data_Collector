@@ -141,8 +141,7 @@ static char const m_target_periph_name[] = "Hearable";
 #define EEG_PREFIX "EEG "
 #define PPG_PREFIX "PPG "
 #define ACC_PREFIX "ACC "
-
-#define RINGBUF_SIZE 16384 //Power of 2!
+#define RINGBUF_SIZE 8192 //Power of 2!
 #define USB_PACKET_SIZE 2048
 
 static uint8_t usbBuffer[3][USB_PACKET_SIZE];
