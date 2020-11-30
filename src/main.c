@@ -302,6 +302,11 @@ static void ble_nus_c_evt_handler(ble_nus_c_t * p_ble_nus_c, ble_nus_c_evt_t con
 					&& p_ble_nus_c->handles.nus_acc_rx_handle
 					&& p_ble_nus_c->handles.nus_acc_tx_handle
 					&& p_ble_nus_c->handles.nus_acc_tx_cccd_handle
+					&& p_ble_nus_c->handles.nus_dev_status_tx_handle
+					&& p_ble_nus_c->handles.nus_dev_status_tx_cccd_handle
+					&& p_ble_nus_c->handles.nus_dev_ctrl_rx_handle
+					&& p_ble_nus_c->handles.nus_dev_tstart_tx_handle
+					&& p_ble_nus_c->handles.nus_dev_tstart_tx_cccd_handle
 			)
 			{
 				if (!BLE_connected)
@@ -312,7 +317,9 @@ static void ble_nus_c_evt_handler(ble_nus_c_t * p_ble_nus_c, ble_nus_c_evt_t con
 					APP_ERROR_CHECK(err_code);
 					err_code = ble_nus_c_tx_notif_enable(p_ble_nus_c,&(p_ble_nus_c->handles.nus_acc_tx_cccd_handle));
 					APP_ERROR_CHECK(err_code);
-					printf("Connected to device with Hearable EEG & PPG & ACCEL Service.");
+					err_code = ble_nus_c_tx_notif_enable(p_ble_nus_c,&(p_ble_nus_c->handles.nus_dev_tstart_tx_cccd_handle));
+					APP_ERROR_CHECK(err_code);
+					printf("Connected to device with Hearable EEG & PPG & ACCEL & DEV Service.");
 					BLE_connected=1;
 				}
 			}
@@ -360,6 +367,10 @@ static void ble_nus_c_evt_handler(ble_nus_c_t * p_ble_nus_c, ble_nus_c_evt_t con
 				NRF_LOG_ERROR("ACCEL data lost");
 				bsp_indication_set(BSP_INDICATE_RCV_ERROR);
 			}
+			break;
+
+        case BLE_NUS_C_EVT_NUS_DEV_TX_EVT:
+        	NRF_LOG_INFO("DEV service data received - no functionality programmed yet");
 			break;
 
         case BLE_NUS_C_EVT_DISCONNECTED:
@@ -422,6 +433,8 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
             APP_ERROR_CHECK(err_code);
             err_code = ble_nus_c_handles_assign(&m_ble_nus_c, p_ble_evt->evt.gap_evt.conn_handle,BLE_UUID_ACC_NUS_SERVICE, NULL);
             APP_ERROR_CHECK(err_code);
+            err_code = ble_nus_c_handles_assign(&m_ble_nus_c, p_ble_evt->evt.gap_evt.conn_handle,BLE_UUID_DEV_NUS_SERVICE, NULL);
+			APP_ERROR_CHECK(err_code);
 
 
             err_code = bsp_indication_set(BSP_INDICATE_CONNECTED);
@@ -649,6 +662,8 @@ static void cdc_acm_user_ev_handler(app_usbd_class_inst_t const * p_inst,
         {
             ret_code_t ret;
             static uint8_t index = 0;
+            uint8_t cmd;
+            uint16_t cmd_length;
             index++;
 
             do
@@ -671,10 +686,30 @@ static void cdc_acm_user_ev_handler(app_usbd_class_inst_t const * p_inst,
                                 length += sizeof(ENDLINE_STRING);
                             }
 
-//                            ret = ble_nus_data_send(&m_nus,
-//                                                    (uint8_t *) m_cdc_data_array,
-//                                                    &length,
-//                                                    m_conn_handle);
+                            if (strncmp(m_cdc_data_array,"start",5)==0)
+                            {
+                            	cmd = 1;
+                            	cmd_length=1;
+                            	ret = ble_nus_c_string_send(&m_ble_nus_c,
+									&cmd,
+									cmd_length,
+									m_ble_nus_c.handles.nus_dev_ctrl_rx_handle);
+                            }
+							else if (strncmp(m_cdc_data_array,"stop",4)==0)
+							{
+								cmd = 0;
+								cmd_length=1;
+								ret = ble_nus_c_string_send(&m_ble_nus_c,
+									&cmd,
+									cmd_length,
+									m_ble_nus_c.handles.nus_dev_ctrl_rx_handle);
+							}
+							else
+							{
+								NRF_LOG_INFO("Invalid command");
+								ret = NRF_SUCCESS;
+							}
+
 
                             if (ret == NRF_ERROR_NOT_FOUND)
                             {

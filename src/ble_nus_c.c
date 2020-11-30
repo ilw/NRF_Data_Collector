@@ -160,8 +160,9 @@ void ble_nus_c_on_db_disc_evt(ble_nus_c_t * p_ble_nus_c, ble_db_discovery_evt_t 
     if (    (p_evt->evt_type == BLE_DB_DISCOVERY_COMPLETE)
         &&  ((p_evt->params.discovered_db.srv_uuid.uuid == BLE_UUID_EEG_NUS_SERVICE)
         		|| (p_evt->params.discovered_db.srv_uuid.uuid == BLE_UUID_PPG_NUS_SERVICE)
-				|| (p_evt->params.discovered_db.srv_uuid.uuid == BLE_UUID_ACC_NUS_SERVICE))
-        &&  (p_evt->params.discovered_db.srv_uuid.type == p_ble_nus_c->uuid_type))
+				|| (p_evt->params.discovered_db.srv_uuid.uuid == BLE_UUID_ACC_NUS_SERVICE)
+				|| (p_evt->params.discovered_db.srv_uuid.uuid == BLE_UUID_DEV_NUS_SERVICE)
+        &&  (p_evt->params.discovered_db.srv_uuid.type == p_ble_nus_c->uuid_type)))
     {
         for (uint32_t i = 0; i < p_evt->params.discovered_db.char_count; i++)
         {
@@ -193,6 +194,22 @@ void ble_nus_c_on_db_disc_evt(ble_nus_c_t * p_ble_nus_c, ble_db_discovery_evt_t 
 					nus_c_evt.handles.nus_acc_tx_handle = p_chars[i].characteristic.handle_value;
 					nus_c_evt.handles.nus_acc_tx_cccd_handle = p_chars[i].cccd_handle;
 					break;
+
+                case BLE_UUID_DEV_CTRL_RX_CHARACTERISTIC:
+					nus_c_evt.handles.nus_dev_ctrl_rx_handle = p_chars[i].characteristic.handle_value;
+					break;
+
+				case BLE_UUID_DEV_STATUS_TX_CHARACTERISTIC:
+					nus_c_evt.handles.nus_dev_status_tx_handle = p_chars[i].characteristic.handle_value;
+					nus_c_evt.handles.nus_dev_status_tx_cccd_handle = p_chars[i].cccd_handle;
+					break;
+
+				case BLE_UUID_DEV_TSTART_TX_CHARACTERISTIC:
+					nus_c_evt.handles.nus_dev_tstart_tx_handle = p_chars[i].characteristic.handle_value;
+					nus_c_evt.handles.nus_dev_tstart_tx_cccd_handle = p_chars[i].cccd_handle;
+					break;
+
+
                 default:
                     break;
             }
@@ -265,12 +282,25 @@ static void on_hvx(ble_nus_c_t * p_ble_nus_c, ble_evt_t const * p_ble_evt)
 			p_ble_nus_c->evt_handler(p_ble_nus_c, &ble_nus_c_evt);
 			NRF_LOG_DEBUG("Client sending ACCEL data.");
 		}
+    else if ((p_ble_nus_c->handles.nus_dev_tstart_tx_handle != BLE_GATT_HANDLE_INVALID)
+			&& (p_ble_evt->evt.gattc_evt.params.hvx.handle == p_ble_nus_c->handles.nus_dev_tstart_tx_handle)
+			&& (p_ble_nus_c->evt_handler != NULL))
+    {
+    	ble_nus_c_evt_t ble_nus_c_evt;
+
+		ble_nus_c_evt.evt_type = BLE_NUS_C_EVT_NUS_DEV_TX_EVT;
+		ble_nus_c_evt.p_data   = (uint8_t *)p_ble_evt->evt.gattc_evt.params.hvx.data;
+		ble_nus_c_evt.data_len = p_ble_evt->evt.gattc_evt.params.hvx.len;
+
+		p_ble_nus_c->evt_handler(p_ble_nus_c, &ble_nus_c_evt);
+		NRF_LOG_DEBUG("Client sending DEV data.");
+    }
 }
 
 uint32_t ble_nus_c_init(ble_nus_c_t * p_ble_nus_c, ble_nus_c_init_t * p_ble_nus_c_init)
 {
     uint32_t      err_code;
-    ble_uuid_t    eeg_uuid,ppg_uuid, acc_uuid;
+    ble_uuid_t    eeg_uuid,ppg_uuid, acc_uuid, dev_uuid;
     ble_uuid128_t nus_base_uuid = HEARABLES_BASE_UUID;
 
     VERIFY_PARAM_NOT_NULL(p_ble_nus_c);
@@ -287,6 +317,8 @@ uint32_t ble_nus_c_init(ble_nus_c_t * p_ble_nus_c, ble_nus_c_init_t * p_ble_nus_
     ppg_uuid.uuid = BLE_UUID_PPG_NUS_SERVICE;
     acc_uuid.type = p_ble_nus_c->uuid_type;
 	acc_uuid.uuid = BLE_UUID_ACC_NUS_SERVICE;
+	dev_uuid.type = p_ble_nus_c->uuid_type;
+	dev_uuid.uuid = BLE_UUID_DEV_NUS_SERVICE;
 
     p_ble_nus_c->conn_handle           = BLE_CONN_HANDLE_INVALID;
     p_ble_nus_c->evt_handler           = p_ble_nus_c_init->evt_handler;
@@ -296,10 +328,15 @@ uint32_t ble_nus_c_init(ble_nus_c_t * p_ble_nus_c, ble_nus_c_init_t * p_ble_nus_
     p_ble_nus_c->handles.nus_ppg_rx_handle = BLE_GATT_HANDLE_INVALID;
     p_ble_nus_c->handles.nus_acc_tx_handle = BLE_GATT_HANDLE_INVALID;
 	p_ble_nus_c->handles.nus_acc_rx_handle = BLE_GATT_HANDLE_INVALID;
+	p_ble_nus_c->handles.nus_dev_status_tx_handle = BLE_GATT_HANDLE_INVALID;
+	p_ble_nus_c->handles.nus_dev_ctrl_rx_handle = BLE_GATT_HANDLE_INVALID;
+	p_ble_nus_c->handles.nus_dev_tstart_tx_handle = BLE_GATT_HANDLE_INVALID;
+
 
     err_code = ble_db_discovery_evt_register(&eeg_uuid);
     err_code = ble_db_discovery_evt_register(&ppg_uuid);
     err_code = ble_db_discovery_evt_register(&acc_uuid);
+    err_code = ble_db_discovery_evt_register(&dev_uuid);
 
     return err_code;
 }
@@ -391,7 +428,7 @@ uint32_t ble_nus_c_tx_notif_enable(ble_nus_c_t * p_ble_nus_c, uint16_t * char_ha
 }
 
 
-uint32_t ble_nus_c_string_send(ble_nus_c_t * p_ble_nus_c, uint8_t * p_string, uint16_t length)
+uint32_t ble_nus_c_string_send(ble_nus_c_t * p_ble_nus_c, uint8_t   * p_data, uint16_t  length, uint16_t    write_handle)
 {
     VERIFY_PARAM_NOT_NULL(p_ble_nus_c);
 
@@ -410,10 +447,10 @@ uint32_t ble_nus_c_string_send(ble_nus_c_t * p_ble_nus_c, uint8_t * p_string, ui
     {
         .write_op = BLE_GATT_OP_WRITE_CMD,
         .flags    = BLE_GATT_EXEC_WRITE_FLAG_PREPARED_WRITE,
-        .handle   = p_ble_nus_c->handles.nus_eeg_rx_handle,
+        .handle   = write_handle,
         .offset   = 0,
         .len      = length,
-        .p_value  = p_string
+        .p_value  = p_data
     };
 
     return sd_ble_gattc_write(p_ble_nus_c->conn_handle, &write_params);
@@ -448,6 +485,14 @@ uint32_t ble_nus_c_handles_assign(ble_nus_c_t               * p_ble_nus,
 			p_ble_nus->handles.nus_acc_tx_handle      = p_peer_handles->nus_acc_tx_handle;
 			p_ble_nus->handles.nus_acc_rx_handle      = p_peer_handles->nus_acc_rx_handle;
 		}
+    	else if (srv_uuid == BLE_UUID_DEV_NUS_SERVICE)
+    	{
+    		p_ble_nus->handles.nus_dev_status_tx_handle = p_peer_handles->nus_dev_status_tx_handle;
+    		p_ble_nus->handles.nus_dev_status_tx_cccd_handle = p_peer_handles->nus_dev_status_tx_cccd_handle;
+    		p_ble_nus->handles.nus_dev_ctrl_rx_handle      = p_peer_handles->nus_dev_ctrl_rx_handle;
+			p_ble_nus->handles.nus_dev_tstart_tx_handle      = p_peer_handles->nus_dev_tstart_tx_handle;
+			p_ble_nus->handles.nus_dev_tstart_tx_cccd_handle      = p_peer_handles->nus_dev_tstart_tx_cccd_handle;
+    	}
     }
     return NRF_SUCCESS;
 }
