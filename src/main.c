@@ -154,7 +154,9 @@ static uint8_t ringBuffer3[RINGBUF_SIZE];
 
 static uint8_t BLE_connected=0;
 
-
+#define EEG_CONFIG_LENGTH 11
+#define PPG_CONFIG_LENGTH 11
+#define ACC_CONFIG_LENGTH 10
 
 /**@brief Function for handling asserts in the SoftDevice.
  *
@@ -439,10 +441,15 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
             err_code = bsp_indication_set(BSP_INDICATE_CONNECTED);
             APP_ERROR_CHECK(err_code);
             NRF_LOG_INFO("Connected");
+//            ble_gap_phys_t const desired_phys =
+//			{
+//					.rx_phys = BLE_GAP_PHY_2MBPS,
+//					.tx_phys = BLE_GAP_PHY_2MBPS,
+//			};
             ble_gap_phys_t const desired_phys =
 			{
-					.rx_phys = BLE_GAP_PHY_2MBPS,
-					.tx_phys = BLE_GAP_PHY_2MBPS,
+					.rx_phys = BLE_GAP_PHY_AUTO,
+					.tx_phys = BLE_GAP_PHY_AUTO,
 			};
             err_code = sd_ble_gap_phy_update(p_gap_evt->conn_handle,&desired_phys);
             APP_ERROR_CHECK(err_code);
@@ -486,11 +493,16 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
         case BLE_GAP_EVT_PHY_UPDATE_REQUEST:
         {
             NRF_LOG_INFO("PHY update request.");
+//            ble_gap_phys_t const phys =
+//            {
+//                    .rx_phys = BLE_GAP_PHY_2MBPS,
+//                    .tx_phys = BLE_GAP_PHY_2MBPS,
+//            };
             ble_gap_phys_t const phys =
-            {
-                    .rx_phys = BLE_GAP_PHY_2MBPS,
-                    .tx_phys = BLE_GAP_PHY_2MBPS,
-            };
+				{
+						.rx_phys = BLE_GAP_PHY_AUTO,
+						.tx_phys = BLE_GAP_PHY_AUTO,
+				};
             err_code = sd_ble_gap_phy_update(p_ble_evt->evt.gap_evt.conn_handle, &phys);
             APP_ERROR_CHECK(err_code);
         } break;
@@ -661,7 +673,7 @@ static void cdc_acm_user_ev_handler(app_usbd_class_inst_t const * p_inst,
         {
             ret_code_t ret;
             static uint8_t index = 0;
-            uint8_t cmd;
+            uint8_t cmd[BLE_NUS_MAX_DATA_LEN];
             uint16_t cmd_length;
             index++;
 
@@ -679,29 +691,61 @@ static void cdc_acm_user_ev_handler(app_usbd_class_inst_t const * p_inst,
                         do
                         {
                             uint16_t length = (uint16_t)index;
-                            if (length + sizeof(ENDLINE_STRING) < BLE_NUS_MAX_DATA_LEN)
-                            {
-                                memcpy(m_cdc_data_array + length, ENDLINE_STRING, sizeof(ENDLINE_STRING));
-                                length += sizeof(ENDLINE_STRING);
-                            }
+//                            if (length + sizeof(ENDLINE_STRING) < BLE_NUS_MAX_DATA_LEN)
+//                            {
+//                                memcpy(m_cdc_data_array + length, ENDLINE_STRING, sizeof(ENDLINE_STRING));
+//                                length += sizeof(ENDLINE_STRING);
+//                            }
 
                             if (strncmp(m_cdc_data_array,"start",5)==0)
                             {
-                            	cmd = 1;
+
+                            	ringbuf_init (&eegRing, ringBuffer, RINGBUF_SIZE);
+								ringbuf_init (&ppgRing, ringBuffer2, RINGBUF_SIZE);
+								ringbuf_init (&accRing, ringBuffer3, RINGBUF_SIZE);
+
+                            	cmd[0] = 1;
                             	cmd_length=1;
                             	ret = ble_nus_c_string_send(&m_ble_nus_c,
-									&cmd,
+									&cmd[0],
 									cmd_length,
 									m_ble_nus_c.handles.nus_dev_ctrl_rx_handle);
                             }
 							else if (strncmp(m_cdc_data_array,"stop",4)==0)
 							{
-								cmd = 0;
+								cmd[0] = 0;
 								cmd_length=1;
 								ret = ble_nus_c_string_send(&m_ble_nus_c,
-									&cmd,
+									&cmd[0],
 									cmd_length,
 									m_ble_nus_c.handles.nus_dev_ctrl_rx_handle);
+							}
+							else if ((strncmp(m_cdc_data_array,"eegconfig",9)==0) && (length>=9+EEG_CONFIG_LENGTH))
+							{
+								for (int i=0;i<EEG_CONFIG_LENGTH;i++) cmd[i] = m_cdc_data_array[9+i];
+								cmd_length=EEG_CONFIG_LENGTH;
+								ret = ble_nus_c_string_send(&m_ble_nus_c,
+									&cmd[0],
+									cmd_length,
+									m_ble_nus_c.handles.nus_eeg_rx_handle);
+							}
+							else if ((strncmp(m_cdc_data_array,"ppgconfig",9)==0) && (length>=9+PPG_CONFIG_LENGTH))
+							{
+								for (int i=0;i<PPG_CONFIG_LENGTH;i++) cmd[i] = m_cdc_data_array[9+i];
+								cmd_length=PPG_CONFIG_LENGTH;
+								ret = ble_nus_c_string_send(&m_ble_nus_c,
+									&cmd[0],
+									cmd_length,
+									m_ble_nus_c.handles.nus_ppg_rx_handle);
+							}
+							else if ((strncmp(m_cdc_data_array,"accconfig",9)==0) && (length>=9+ACC_CONFIG_LENGTH))
+							{
+								for (int i=0;i<ACC_CONFIG_LENGTH;i++) cmd[i] = m_cdc_data_array[9+i];
+								cmd_length=ACC_CONFIG_LENGTH;
+								ret = ble_nus_c_string_send(&m_ble_nus_c,
+									&cmd[0],
+									cmd_length,
+									m_ble_nus_c.handles.nus_acc_rx_handle);
 							}
 							else
 							{
