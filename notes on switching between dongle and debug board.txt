@@ -1,0 +1,3 @@
+Should just be a case of changing between the makefile lines:
+TARGET_BOARD := BOARD_PCA10059
+#TARGET_BOARD := BOARD_PCA10056

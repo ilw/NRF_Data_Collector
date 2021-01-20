@@ -172,7 +172,7 @@
 
 // <o> NRF_BLE_SCAN_SUPERVISION_TIMEOUT - Determines the supervision time-out in units of 10 millisecond. 
 #ifndef NRF_BLE_SCAN_SUPERVISION_TIMEOUT
-#define NRF_BLE_SCAN_SUPERVISION_TIMEOUT 4000
+#define NRF_BLE_SCAN_SUPERVISION_TIMEOUT 200
 #endif
 
 // <o> NRF_BLE_SCAN_SCAN_PHY  - PHY to scan on.
@@ -2540,7 +2540,7 @@
 // <e> NRFX_POWER_ENABLED - nrfx_power - POWER peripheral driver
 //==========================================================
 #ifndef NRFX_POWER_ENABLED
-#define NRFX_POWER_ENABLED 0
+#define NRFX_POWER_ENABLED 1
 #endif
 // <o> NRFX_POWER_CONFIG_IRQ_PRIORITY  - Interrupt priority
  
@@ -2754,6 +2754,13 @@
 #define NRFX_PWM2_ENABLED 0
 #endif
 
+// <q> NRFX_PWM3_ENABLED  - Enable PWM3 instance
+ 
+
+#ifndef NRFX_PWM3_ENABLED
+#define NRFX_PWM3_ENABLED 0
+#endif
+
 // <o> NRFX_PWM_DEFAULT_CONFIG_OUT0_PIN - Out0 pin  <0-31> 
 
 
@@ -2893,34 +2900,6 @@
 
 #ifndef NRFX_PWM_CONFIG_DEBUG_COLOR
 #define NRFX_PWM_CONFIG_DEBUG_COLOR 0
-#endif
-
-// </e>
-
-// <e> NRFX_PWM_NRF52_ANOMALY_109_WORKAROUND_ENABLED - Enables nRF52 Anomaly 109 workaround for PWM.
-
-// <i> The workaround uses interrupts to wake up the CPU and ensure
-// <i> it is active when PWM is about to start a DMA transfer. For
-// <i> initial transfer, done when a playback is started via PPI,
-// <i> a specific EGU instance is used to generate the interrupt.
-// <i> During the playback, the PWM interrupt triggered on SEQEND
-// <i> event of a preceding sequence is used to protect the transfer
-// <i> done for the next sequence to be played.
-//==========================================================
-#ifndef NRFX_PWM_NRF52_ANOMALY_109_WORKAROUND_ENABLED
-#define NRFX_PWM_NRF52_ANOMALY_109_WORKAROUND_ENABLED 0
-#endif
-// <o> NRFX_PWM_NRF52_ANOMALY_109_EGU_INSTANCE  - EGU instance used by the nRF52 Anomaly 109 workaround for PWM.
- 
-// <0=> EGU0 
-// <1=> EGU1 
-// <2=> EGU2 
-// <3=> EGU3 
-// <4=> EGU4 
-// <5=> EGU5 
-
-#ifndef NRFX_PWM_NRF52_ANOMALY_109_EGU_INSTANCE
-#define NRFX_PWM_NRF52_ANOMALY_109_EGU_INSTANCE 5
 #endif
 
 // </e>
@@ -3076,6 +3055,134 @@
 #endif
 
 // </e>
+
+// </e>
+
+// <e> NRFX_QSPI_ENABLED - nrfx_qspi - QSPI peripheral driver
+//==========================================================
+#ifndef NRFX_QSPI_ENABLED
+#define NRFX_QSPI_ENABLED 0
+#endif
+// <o> NRFX_QSPI_CONFIG_SCK_DELAY - tSHSL, tWHSL and tSHWL in number of 16 MHz periods (62.5 ns).  <0-255> 
+
+
+#ifndef NRFX_QSPI_CONFIG_SCK_DELAY
+#define NRFX_QSPI_CONFIG_SCK_DELAY 1
+#endif
+
+// <o> NRFX_QSPI_CONFIG_XIP_OFFSET - Address offset in the external memory for Execute in Place operation. 
+#ifndef NRFX_QSPI_CONFIG_XIP_OFFSET
+#define NRFX_QSPI_CONFIG_XIP_OFFSET 0
+#endif
+
+// <o> NRFX_QSPI_CONFIG_READOC  - Number of data lines and opcode used for reading.
+ 
+// <0=> FastRead 
+// <1=> Read2O 
+// <2=> Read2IO 
+// <3=> Read4O 
+// <4=> Read4IO 
+
+#ifndef NRFX_QSPI_CONFIG_READOC
+#define NRFX_QSPI_CONFIG_READOC 0
+#endif
+
+// <o> NRFX_QSPI_CONFIG_WRITEOC  - Number of data lines and opcode used for writing.
+ 
+// <0=> PP 
+// <1=> PP2O 
+// <2=> PP4O 
+// <3=> PP4IO 
+
+#ifndef NRFX_QSPI_CONFIG_WRITEOC
+#define NRFX_QSPI_CONFIG_WRITEOC 0
+#endif
+
+// <o> NRFX_QSPI_CONFIG_ADDRMODE  - Addressing mode.
+ 
+// <0=> 24bit 
+// <1=> 32bit 
+
+#ifndef NRFX_QSPI_CONFIG_ADDRMODE
+#define NRFX_QSPI_CONFIG_ADDRMODE 0
+#endif
+
+// <o> NRFX_QSPI_CONFIG_MODE  - SPI mode.
+ 
+// <0=> Mode 0 
+// <1=> Mode 1 
+
+#ifndef NRFX_QSPI_CONFIG_MODE
+#define NRFX_QSPI_CONFIG_MODE 0
+#endif
+
+// <o> NRFX_QSPI_CONFIG_FREQUENCY  - Frequency divider.
+ 
+// <0=> 32MHz/1 
+// <1=> 32MHz/2 
+// <2=> 32MHz/3 
+// <3=> 32MHz/4 
+// <4=> 32MHz/5 
+// <5=> 32MHz/6 
+// <6=> 32MHz/7 
+// <7=> 32MHz/8 
+// <8=> 32MHz/9 
+// <9=> 32MHz/10 
+// <10=> 32MHz/11 
+// <11=> 32MHz/12 
+// <12=> 32MHz/13 
+// <13=> 32MHz/14 
+// <14=> 32MHz/15 
+// <15=> 32MHz/16 
+
+#ifndef NRFX_QSPI_CONFIG_FREQUENCY
+#define NRFX_QSPI_CONFIG_FREQUENCY 15
+#endif
+
+// <s> NRFX_QSPI_PIN_SCK - SCK pin value.
+#ifndef NRFX_QSPI_PIN_SCK
+#define NRFX_QSPI_PIN_SCK NRF_QSPI_PIN_NOT_CONNECTED
+#endif
+
+// <s> NRFX_QSPI_PIN_CSN - CSN pin value.
+#ifndef NRFX_QSPI_PIN_CSN
+#define NRFX_QSPI_PIN_CSN NRF_QSPI_PIN_NOT_CONNECTED
+#endif
+
+// <s> NRFX_QSPI_PIN_IO0 - IO0 pin value.
+#ifndef NRFX_QSPI_PIN_IO0
+#define NRFX_QSPI_PIN_IO0 NRF_QSPI_PIN_NOT_CONNECTED
+#endif
+
+// <s> NRFX_QSPI_PIN_IO1 - IO1 pin value.
+#ifndef NRFX_QSPI_PIN_IO1
+#define NRFX_QSPI_PIN_IO1 NRF_QSPI_PIN_NOT_CONNECTED
+#endif
+
+// <s> NRFX_QSPI_PIN_IO2 - IO2 pin value.
+#ifndef NRFX_QSPI_PIN_IO2
+#define NRFX_QSPI_PIN_IO2 NRF_QSPI_PIN_NOT_CONNECTED
+#endif
+
+// <s> NRFX_QSPI_PIN_IO3 - IO3 pin value.
+#ifndef NRFX_QSPI_PIN_IO3
+#define NRFX_QSPI_PIN_IO3 NRF_QSPI_PIN_NOT_CONNECTED
+#endif
+
+// <o> NRFX_QSPI_CONFIG_IRQ_PRIORITY  - Interrupt priority
+ 
+// <0=> 0 (highest) 
+// <1=> 1 
+// <2=> 2 
+// <3=> 3 
+// <4=> 4 
+// <5=> 5 
+// <6=> 6 
+// <7=> 7 
+
+#ifndef NRFX_QSPI_CONFIG_IRQ_PRIORITY
+#define NRFX_QSPI_CONFIG_IRQ_PRIORITY 6
+#endif
 
 // </e>
 
@@ -3405,6 +3512,20 @@
 #define NRFX_SPIM2_ENABLED 0
 #endif
 
+// <q> NRFX_SPIM3_ENABLED  - Enable SPIM3 instance
+ 
+
+#ifndef NRFX_SPIM3_ENABLED
+#define NRFX_SPIM3_ENABLED 0
+#endif
+
+// <q> NRFX_SPIM_EXTENDED_ENABLED  - Enable extended SPIM features
+ 
+
+#ifndef NRFX_SPIM_EXTENDED_ENABLED
+#define NRFX_SPIM_EXTENDED_ENABLED 0
+#endif
+
 // <o> NRFX_SPIM_MISO_PULL_CFG  - MISO pin pull configuration.
  
 // <0=> NRF_GPIO_PIN_NOPULL 
@@ -3480,20 +3601,6 @@
 #endif
 
 // </e>
-
-// <q> NRFX_SPIM_NRF52_ANOMALY_109_WORKAROUND_ENABLED  - Enables nRF52 anomaly 109 workaround for SPIM.
- 
-
-// <i> The workaround uses interrupts to wake up the CPU by catching
-// <i> a start event of zero-length transmission to start the clock. This 
-// <i> ensures that the DMA transfer will be executed without issues and
-// <i> that the proper transfer will be started. See more in the Errata 
-// <i> document or Anomaly 109 Addendum located at 
-// <i> https://infocenter.nordicsemi.com/
-
-#ifndef NRFX_SPIM_NRF52_ANOMALY_109_WORKAROUND_ENABLED
-#define NRFX_SPIM_NRF52_ANOMALY_109_WORKAROUND_ENABLED 0
-#endif
 
 // </e>
 
@@ -3602,20 +3709,6 @@
 #endif
 
 // </e>
-
-// <q> NRFX_SPIS_NRF52_ANOMALY_109_WORKAROUND_ENABLED  - Enables nRF52 Anomaly 109 workaround for SPIS.
- 
-
-// <i> The workaround uses a GPIOTE channel to generate interrupts
-// <i> on falling edges detected on the CSN line. This will make
-// <i> the CPU active for the moment when SPIS starts DMA transfers,
-// <i> and this way the transfers will be protected.
-// <i> This workaround uses GPIOTE driver, so this driver must be
-// <i> enabled as well.
-
-#ifndef NRFX_SPIS_NRF52_ANOMALY_109_WORKAROUND_ENABLED
-#define NRFX_SPIS_NRF52_ANOMALY_109_WORKAROUND_ENABLED 0
-#endif
 
 // </e>
 
@@ -3830,6 +3923,12 @@
 
 // </e>
 
+// <q> NRFX_SYSTICK_ENABLED  - nrfx_systick - ARM(R) SysTick driver
+ 
+
+#ifndef NRFX_SYSTICK_ENABLED
+#define NRFX_SYSTICK_ENABLED 1
+#endif
 // <e> NRFX_TIMER_ENABLED - nrfx_timer - TIMER periperal driver
 //==========================================================
 #ifndef NRFX_TIMER_ENABLED
@@ -4076,19 +4175,6 @@
 #endif
 
 // </e>
-
-// <q> NRFX_TWIM_NRF52_ANOMALY_109_WORKAROUND_ENABLED  - Enables nRF52 anomaly 109 workaround for TWIM.
- 
-
-// <i> The workaround uses interrupts to wake up the CPU by catching
-// <i> the start event of zero-frequency transmission, clear the 
-// <i> peripheral, set desired frequency, start the peripheral, and
-// <i> the proper transmission. See more in the Errata document or
-// <i> Anomaly 109 Addendum located at https://infocenter.nordicsemi.com/
-
-#ifndef NRFX_TWIM_NRF52_ANOMALY_109_WORKAROUND_ENABLED
-#define NRFX_TWIM_NRF52_ANOMALY_109_WORKAROUND_ENABLED 0
-#endif
 
 // </e>
 
@@ -4341,6 +4427,11 @@
 #define NRFX_UARTE0_ENABLED 0
 #endif
 
+// <o> NRFX_UARTE1_ENABLED - Enable UARTE1 instance 
+#ifndef NRFX_UARTE1_ENABLED
+#define NRFX_UARTE1_ENABLED 0
+#endif
+
 // <o> NRFX_UARTE_DEFAULT_CONFIG_HWFC  - Hardware Flow Control
  
 // <0=> Disabled 
@@ -4396,7 +4487,7 @@
 // <7=> 7 
 
 #ifndef NRFX_UARTE_DEFAULT_CONFIG_IRQ_PRIORITY
-#define NRFX_UARTE_DEFAULT_CONFIG_IRQ_PRIORITY 5
+#define NRFX_UARTE_DEFAULT_CONFIG_IRQ_PRIORITY 6
 #endif
 
 // <e> NRFX_UARTE_CONFIG_LOG_ENABLED - Enables logging in the module.
@@ -4570,6 +4661,60 @@
 #endif
 
 // </e>
+
+// </e>
+
+// <e> NRFX_USBD_ENABLED - nrfx_usbd - USBD peripheral driver
+//==========================================================
+#ifndef NRFX_USBD_ENABLED
+#define NRFX_USBD_ENABLED 1
+#endif
+// <o> NRFX_USBD_CONFIG_IRQ_PRIORITY  - Interrupt priority
+ 
+// <0=> 0 (highest) 
+// <1=> 1 
+// <2=> 2 
+// <3=> 3 
+// <4=> 4 
+// <5=> 5 
+// <6=> 6 
+// <7=> 7 
+
+#ifndef NRFX_USBD_CONFIG_IRQ_PRIORITY
+#define NRFX_USBD_CONFIG_IRQ_PRIORITY 6
+#endif
+
+// <o> NRFX_USBD_CONFIG_DMASCHEDULER_MODE  - USBD DMA scheduler working scheme
+ 
+// <0=> Prioritized access 
+// <1=> Round Robin 
+
+#ifndef NRFX_USBD_CONFIG_DMASCHEDULER_MODE
+#define NRFX_USBD_CONFIG_DMASCHEDULER_MODE 0
+#endif
+
+// <q> NRFX_USBD_CONFIG_DMASCHEDULER_ISO_BOOST  - Give priority to isochronous transfers
+ 
+
+// <i> This option gives priority to isochronous transfers.
+// <i> Enabling it assures that isochronous transfers are always processed,
+// <i> even if multiple other transfers are pending.
+// <i> Isochronous endpoints are prioritized before the usbd_dma_scheduler_algorithm
+// <i> function is called, so the option is independent of the algorithm chosen.
+
+#ifndef NRFX_USBD_CONFIG_DMASCHEDULER_ISO_BOOST
+#define NRFX_USBD_CONFIG_DMASCHEDULER_ISO_BOOST 1
+#endif
+
+// <q> NRFX_USBD_CONFIG_ISO_IN_ZLP  - Respond to an IN token on ISO IN endpoint with ZLP when no data is ready
+ 
+
+// <i> If set, ISO IN endpoint will respond to an IN token with ZLP when no data is ready to be sent.
+// <i> Else, there will be no response.
+
+#ifndef NRFX_USBD_CONFIG_ISO_IN_ZLP
+#define NRFX_USBD_CONFIG_ISO_IN_ZLP 0
+#endif
 
 // </e>
 
@@ -4771,7 +4916,7 @@
 // <e> POWER_ENABLED - nrf_drv_power - POWER peripheral driver - legacy layer
 //==========================================================
 #ifndef POWER_ENABLED
-#define POWER_ENABLED 0
+#define POWER_ENABLED 1
 #endif
 // <o> POWER_CONFIG_IRQ_PRIORITY  - Interrupt priority
  
@@ -4937,33 +5082,12 @@
 #define PWM2_ENABLED 0
 #endif
 
-// <e> PWM_NRF52_ANOMALY_109_WORKAROUND_ENABLED - Enables nRF52 Anomaly 109 workaround for PWM.
-
-// <i> The workaround uses interrupts to wake up the CPU and ensure
-// <i> it is active when PWM is about to start a DMA transfer. For
-// <i> initial transfer, done when a playback is started via PPI,
-// <i> a specific EGU instance is used to generate the interrupt.
-// <i> During the playback, the PWM interrupt triggered on SEQEND
-// <i> event of a preceding sequence is used to protect the transfer
-// <i> done for the next sequence to be played.
-//==========================================================
-#ifndef PWM_NRF52_ANOMALY_109_WORKAROUND_ENABLED
-#define PWM_NRF52_ANOMALY_109_WORKAROUND_ENABLED 0
-#endif
-// <o> PWM_NRF52_ANOMALY_109_EGU_INSTANCE  - EGU instance used by the nRF52 Anomaly 109 workaround for PWM.
+// <q> PWM3_ENABLED  - Enable PWM3 instance
  
-// <0=> EGU0 
-// <1=> EGU1 
-// <2=> EGU2 
-// <3=> EGU3 
-// <4=> EGU4 
-// <5=> EGU5 
 
-#ifndef PWM_NRF52_ANOMALY_109_EGU_INSTANCE
-#define PWM_NRF52_ANOMALY_109_EGU_INSTANCE 5
+#ifndef PWM3_ENABLED
+#define PWM3_ENABLED 0
 #endif
-
-// </e>
 
 // </e>
 
@@ -5435,20 +5559,6 @@
 #define SPIS2_ENABLED 0
 #endif
 
-// <q> SPIS_NRF52_ANOMALY_109_WORKAROUND_ENABLED  - Enables nRF52 Anomaly 109 workaround for SPIS.
- 
-
-// <i> The workaround uses a GPIOTE channel to generate interrupts
-// <i> on falling edges detected on the CSN line. This will make
-// <i> the CPU active for the moment when SPIS starts DMA transfers,
-// <i> and this way the transfers will be protected.
-// <i> This workaround uses GPIOTE driver, so this driver must be
-// <i> enabled as well.
-
-#ifndef SPIS_NRF52_ANOMALY_109_WORKAROUND_ENABLED
-#define SPIS_NRF52_ANOMALY_109_WORKAROUND_ENABLED 0
-#endif
-
 // </e>
 
 // <e> SPI_ENABLED - nrf_drv_spi - SPI/SPIM peripheral driver - legacy layer
@@ -5524,20 +5634,6 @@
 #endif
 
 // </e>
-
-// <q> SPIM_NRF52_ANOMALY_109_WORKAROUND_ENABLED  - Enables nRF52 anomaly 109 workaround for SPIM.
- 
-
-// <i> The workaround uses interrupts to wake up the CPU by catching
-// <i> a start event of zero-length transmission to start the clock. This 
-// <i> ensures that the DMA transfer will be executed without issues and
-// <i> that the proper transfer will be started. See more in the Errata 
-// <i> document or Anomaly 109 Addendum located at 
-// <i> https://infocenter.nordicsemi.com/
-
-#ifndef SPIM_NRF52_ANOMALY_109_WORKAROUND_ENABLED
-#define SPIM_NRF52_ANOMALY_109_WORKAROUND_ENABLED 0
-#endif
 
 // </e>
 
@@ -5797,19 +5893,6 @@
 
 // </e>
 
-// <q> TWIM_NRF52_ANOMALY_109_WORKAROUND_ENABLED  - Enables nRF52 anomaly 109 workaround for TWIM.
- 
-
-// <i> The workaround uses interrupts to wake up the CPU by catching
-// <i> the start event of zero-frequency transmission, clear the 
-// <i> peripheral, set desired frequency, start the peripheral, and
-// <i> the proper transmission. See more in the Errata document or
-// <i> Anomaly 109 Addendum located at https://infocenter.nordicsemi.com/
-
-#ifndef TWIM_NRF52_ANOMALY_109_WORKAROUND_ENABLED
-#define TWIM_NRF52_ANOMALY_109_WORKAROUND_ENABLED 0
-#endif
-
 // </e>
 
 // <e> UART_ENABLED - nrf_drv_uart - UART/UARTE peripheral driver - legacy layer
@@ -5903,12 +5986,19 @@
 
 // </e>
 
+// <e> UART1_ENABLED - Enable UART1 instance
+//==========================================================
+#ifndef UART1_ENABLED
+#define UART1_ENABLED 0
+#endif
+// </e>
+
 // </e>
 
 // <e> USBD_ENABLED - nrf_drv_usbd - Software Component
 //==========================================================
 #ifndef USBD_ENABLED
-#define USBD_ENABLED 0
+#define USBD_ENABLED 1
 #endif
 // <o> USBD_CONFIG_IRQ_PRIORITY  - Interrupt priority
  
@@ -6002,18 +6092,6 @@
 #endif
 
 // </e>
-
-// <h> nrfx_qspi - QSPI peripheral driver
-
-//==========================================================
-// </h> 
-//==========================================================
-
-// <h> nrfx_usbd - USBD peripheral driver
-
-//==========================================================
-// </h> 
-//==========================================================
 
 // </h> 
 //==========================================================
@@ -6241,7 +6319,7 @@
 // <e> APP_USBD_ENABLED - app_usbd - USB Device library
 //==========================================================
 #ifndef APP_USBD_ENABLED
-#define APP_USBD_ENABLED 0
+#define APP_USBD_ENABLED 1
 #endif
 // <o> APP_USBD_VID - Vendor ID.  <0x0000-0xFFFF> 
 
@@ -6250,7 +6328,7 @@
 // <i> Vendor ID ordered from USB IF: http://www.usb.org/developers/vendor/
 
 #ifndef APP_USBD_VID
-#define APP_USBD_VID 0
+#define APP_USBD_VID 0x1915
 #endif
 
 // <o> APP_USBD_PID - Product ID.  <0x0000-0xFFFF> 
@@ -6260,7 +6338,7 @@
 // <i> Selected Product ID
 
 #ifndef APP_USBD_PID
-#define APP_USBD_PID 0
+#define APP_USBD_PID 0x521A
 #endif
 
 // <o> APP_USBD_DEVICE_VER_MAJOR - Device version, major part.  <0-99> 
@@ -6445,7 +6523,7 @@
  
 
 #ifndef APP_USBD_STRING_SERIAL_EXTERN
-#define APP_USBD_STRING_SERIAL_EXTERN 0
+#define APP_USBD_STRING_SERIAL_EXTERN 1
 #endif
 
 // <s> APP_USBD_STRING_SERIAL - String descriptor for the serial number.
@@ -6453,7 +6531,7 @@
 // <i> Note: This value is not editable in Configuration Wizard.
 // <i> Serial number that is defined the same way like in @ref APP_USBD_STRINGS_MANUFACTURER.
 #ifndef APP_USBD_STRING_SERIAL
-#define APP_USBD_STRING_SERIAL APP_USBD_STRING_DESC("000000000000")
+#define APP_USBD_STRING_SERIAL g_extern_serial_number
 #endif
 
 // </e>
@@ -6748,7 +6826,7 @@
 // <268435456=> 1000000 baud 
 
 #ifndef HCI_UART_BAUDRATE
-#define HCI_UART_BAUDRATE 30801920
+#define HCI_UART_BAUDRATE 268435456
 #endif
 
 // <o> HCI_UART_FLOW_CONTROL  - Hardware Flow Control
@@ -7218,6 +7296,22 @@
 // <29=> 29 (P0.29) 
 // <30=> 30 (P0.30) 
 // <31=> 31 (P0.31) 
+// <32=> 32 (P1.0) 
+// <33=> 33 (P1.1) 
+// <34=> 34 (P1.2) 
+// <35=> 35 (P1.3) 
+// <36=> 36 (P1.4) 
+// <37=> 37 (P1.5) 
+// <38=> 38 (P1.6) 
+// <39=> 39 (P1.7) 
+// <40=> 40 (P1.8) 
+// <41=> 41 (P1.9) 
+// <42=> 42 (P1.10) 
+// <43=> 43 (P1.11) 
+// <44=> 44 (P1.12) 
+// <45=> 45 (P1.13) 
+// <46=> 46 (P1.14) 
+// <47=> 47 (P1.15) 
 // <4294967295=> Not connected 
 
 #ifndef NRF_PWR_MGMT_SLEEP_DEBUG_PIN
@@ -7413,7 +7507,7 @@
  
 
 #ifndef APP_USBD_CDC_ACM_ENABLED
-#define APP_USBD_CDC_ACM_ENABLED 0
+#define APP_USBD_CDC_ACM_ENABLED 1
 #endif
 
 // <q> APP_USBD_CDC_ACM_ZLP_ON_EPSIZE_WRITE  - Send ZLP on write with same size as endpoint
@@ -7673,7 +7767,7 @@
 // <i> Log data is buffered and can be processed in idle.
 
 #ifndef NRF_LOG_DEFERRED
-#define NRF_LOG_DEFERRED 0
+#define NRF_LOG_DEFERRED 1
 #endif
 
 // <q> NRF_LOG_FILTERS_ENABLED  - Enable dynamic filtering of logs.
@@ -11151,17 +11245,17 @@
 
 // <o> NRF_SDH_BLE_GATT_MAX_MTU_SIZE - Static maximum MTU size. ??Multiple of 23 better??
 #ifndef NRF_SDH_BLE_GATT_MAX_MTU_SIZE
-#define NRF_SDH_BLE_GATT_MAX_MTU_SIZE 230
+#define NRF_SDH_BLE_GATT_MAX_MTU_SIZE 247
 #endif
 
 // <o> NRF_SDH_BLE_GATTS_ATTR_TAB_SIZE - Attribute Table size in bytes. The size must be a multiple of 4. 
 #ifndef NRF_SDH_BLE_GATTS_ATTR_TAB_SIZE
-#define NRF_SDH_BLE_GATTS_ATTR_TAB_SIZE 2000
+#define NRF_SDH_BLE_GATTS_ATTR_TAB_SIZE 2400
 #endif
 
 // <o> NRF_SDH_BLE_VS_UUID_COUNT - The number of vendor-specific UUIDs. 
 #ifndef NRF_SDH_BLE_VS_UUID_COUNT
-#define NRF_SDH_BLE_VS_UUID_COUNT 4
+#define NRF_SDH_BLE_VS_UUID_COUNT 18
 #endif
 
 // <q> NRF_SDH_BLE_SERVICE_CHANGED  - Include the Service Changed characteristic in the Attribute Table.

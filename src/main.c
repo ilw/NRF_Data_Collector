@@ -42,7 +42,6 @@
 #include <stdbool.h>
 #include "nordic_common.h"
 #include "app_error.h"
-#include "app_uart.h"
 #include "ble_db_discovery.h"
 #include "app_timer.h"
 #include "app_util.h"
@@ -61,6 +60,51 @@
 #include "nrf_log.h"
 #include "nrf_log_ctrl.h"
 #include "nrf_log_default_backends.h"
+
+#include "nrf_drv_power.h"
+#include "app_error.h"
+#include "app_usbd_core.h"
+#include "app_usbd.h"
+#include "app_usbd_string_desc.h"
+#include "app_usbd_cdc_acm.h"
+#include "app_usbd_serial_num.h"
+#include "ringbuf.h"
+
+
+#define ENDLINE_STRING "\r\n"
+
+// USB DEFINES START
+
+static bool m_usb_connected = false;
+
+static void cdc_acm_user_ev_handler(app_usbd_class_inst_t const * p_inst,
+                                    app_usbd_cdc_acm_user_event_t event);
+
+#define CDC_ACM_COMM_INTERFACE  0
+#define CDC_ACM_COMM_EPIN       NRF_DRV_USBD_EPIN2
+
+#define CDC_ACM_DATA_INTERFACE  1
+#define CDC_ACM_DATA_EPIN       NRF_DRV_USBD_EPIN1
+#define CDC_ACM_DATA_EPOUT      NRF_DRV_USBD_EPOUT1
+
+static char m_cdc_data_array[BLE_NUS_MAX_DATA_LEN];
+
+/** @brief CDC_ACM class instance */
+APP_USBD_CDC_ACM_GLOBAL_DEF(m_app_cdc_acm,
+                            cdc_acm_user_ev_handler,
+                            CDC_ACM_COMM_INTERFACE,
+                            CDC_ACM_DATA_INTERFACE,
+                            CDC_ACM_COMM_EPIN,
+                            CDC_ACM_DATA_EPIN,
+                            CDC_ACM_DATA_EPOUT,
+                            APP_USBD_CDC_COMM_PROTOCOL_AT_V250);
+
+// USB DEFINES END
+
+
+
+
+
 
 
 #define APP_BLE_CONN_CFG_TAG    1                                       /**< Tag that refers to the BLE stack configuration set with @ref sd_ble_cfg_set. The default tag is @ref BLE_CONN_CFG_TAG_DEFAULT. */
@@ -93,23 +137,26 @@ static uint16_t m_ble_nus_max_data_len = BLE_GATT_ATT_MTU_DEFAULT - OPCODE_LENGT
 //};
 
 static char const m_target_periph_name[] = "Hearable";
+#define PREFIX_LENGTH 4
 #define EEG_PREFIX "EEG "
 #define PPG_PREFIX "PPG "
+#define ACC_PREFIX "ACC "
+#define RINGBUF_SIZE 8192 //Power of 2!
+#define USB_PACKET_SIZE 2048
 
-#define EEG_BUFFER_COUNT 52
-#define PPG_BUFFER_COUNT 4
+static uint8_t usbBuffer[3][USB_PACKET_SIZE];
 
-#define BUFFER_LENGTH 256
+struct ringbuf eegRing,ppgRing,accRing;
+static uint8_t ringBuffer[RINGBUF_SIZE];
+static uint8_t ringBuffer2[RINGBUF_SIZE];
+static uint8_t ringBuffer3[RINGBUF_SIZE];
 
-uint8_t eeg_buff[EEG_BUFFER_COUNT][BUFFER_LENGTH] ={0};
-uint8_t ppg_buff[PPG_BUFFER_COUNT][BUFFER_LENGTH] ={0};
-static uint8_t volatile eeg_idx =0;
-static uint8_t volatile ppg_idx =0;
-
-static uint8_t prev_eeg_idx=0;
-static uint8_t prev_ppg_idx=0;
 
 static uint8_t BLE_connected=0;
+
+#define EEG_CONFIG_LENGTH 11
+#define PPG_CONFIG_LENGTH 11
+#define ACC_CONFIG_LENGTH 10
 
 /**@brief Function for handling asserts in the SoftDevice.
  *
@@ -228,104 +275,6 @@ static void db_disc_handler(ble_db_discovery_evt_t * p_evt)
 }
 
 
-/**@brief Function for handling characters received by the Nordic UART Service (NUS).
- *
- * @details This function takes a list of characters of length data_len and prints the characters out on UART.
- *          If @ref ECHOBACK_BLE_UART_DATA is set, the data is sent back to sender.
- */
- //TODO Change this?
-static void ble_nus_chars_received_uart_print(uint8_t * p_data, uint16_t data_len)
-{
-    ret_code_t ret_val;
-
-    NRF_LOG_DEBUG("Receiving data.");
-    NRF_LOG_HEXDUMP_DEBUG(p_data, data_len);
-
-    for (uint32_t i = 0; i < data_len; i++)
-    {
-        do
-        {
-            ret_val = app_uart_put(p_data[i]);
-            if ((ret_val != NRF_SUCCESS) && (ret_val != NRF_ERROR_BUSY))
-            {
-                NRF_LOG_ERROR("app_uart_put failed for index 0x%04x.", i);
-                APP_ERROR_CHECK(ret_val);
-            }
-        } while (ret_val == NRF_ERROR_BUSY);
-    }
-    if (p_data[data_len-1] == '\r')
-    {
-        while (app_uart_put('\n') == NRF_ERROR_BUSY);
-    }
-    if (ECHOBACK_BLE_UART_DATA)
-    {
-        // Send data back to the peripheral.
-        do
-        {
-            ret_val = ble_nus_c_string_send(&m_ble_nus_c, p_data, data_len);
-            if ((ret_val != NRF_SUCCESS) && (ret_val != NRF_ERROR_BUSY))
-            {
-                NRF_LOG_ERROR("Failed sending NUS message. Error 0x%x. ", ret_val);
-                APP_ERROR_CHECK(ret_val);
-            }
-        } while (ret_val == NRF_ERROR_BUSY);
-    }
-}
-
-
-/**@brief   Function for handling app_uart events.
- *
- * @details This function receives a single character from the app_uart module and appends it to
- *          a string. The string is sent over BLE when the last character received is a
- *          'new line' '\n' (hex 0x0A) or if the string reaches the maximum data length.
- */
-void uart_event_handle(app_uart_evt_t * p_event)
-{
-    static uint8_t data_array[BLE_NUS_MAX_DATA_LEN];
-    static uint16_t index = 0;
-    uint32_t ret_val;
-
-    switch (p_event->evt_type)
-    {
-        /**@snippet [Handling data from UART] */
-        case APP_UART_DATA_READY:
-            UNUSED_VARIABLE(app_uart_get(&data_array[index]));
-            index++;
-
-            if ((data_array[index - 1] == '\n') || (index >= (m_ble_nus_max_data_len)))
-            {
-                NRF_LOG_DEBUG("Ready to send data over BLE NUS");
-                NRF_LOG_HEXDUMP_DEBUG(data_array, index);
-
-                do
-                {
-                    ret_val = ble_nus_c_string_send(&m_ble_nus_c, data_array, index);
-                    if ( (ret_val != NRF_ERROR_INVALID_STATE) && (ret_val != NRF_ERROR_RESOURCES) )
-                    {
-                        APP_ERROR_CHECK(ret_val);
-                    }
-                } while (ret_val == NRF_ERROR_RESOURCES);
-
-                index = 0;
-            }
-            break;
-
-        /**@snippet [Handling data from UART] */
-        case APP_UART_COMMUNICATION_ERROR:
-            NRF_LOG_ERROR("Communication error occurred while handling UART.");
-            APP_ERROR_HANDLER(p_event->data.error_communication);
-            break;
-
-        case APP_UART_FIFO_ERROR:
-            NRF_LOG_ERROR("Error occurred in FIFO module used by UART.");
-            APP_ERROR_HANDLER(p_event->data.error_code);
-            break;
-
-        default:
-            break;
-    }
-}
-
 
 /**@brief Callback handling Nordic UART Service (NUS) client events.
  *
@@ -339,7 +288,8 @@ void uart_event_handle(app_uart_evt_t * p_event)
 static void ble_nus_c_evt_handler(ble_nus_c_t * p_ble_nus_c, ble_nus_c_evt_t const * p_ble_nus_evt)
 {
     ret_code_t err_code;
-    int i,j;
+    int i;
+    uint16_t count=0;
     switch (p_ble_nus_evt->evt_type)
     {
     	case BLE_NUS_C_EVT_DISCOVERY_AVAILABLE:
@@ -350,6 +300,14 @@ static void ble_nus_c_evt_handler(ble_nus_c_t * p_ble_nus_c, ble_nus_c_evt_t con
 					&& p_ble_nus_c->handles.nus_ppg_rx_handle
 					&& p_ble_nus_c->handles.nus_ppg_tx_handle
 					&& p_ble_nus_c->handles.nus_ppg_tx_cccd_handle
+					&& p_ble_nus_c->handles.nus_acc_rx_handle
+					&& p_ble_nus_c->handles.nus_acc_tx_handle
+					&& p_ble_nus_c->handles.nus_acc_tx_cccd_handle
+					&& p_ble_nus_c->handles.nus_dev_status_tx_handle
+					&& p_ble_nus_c->handles.nus_dev_status_tx_cccd_handle
+					&& p_ble_nus_c->handles.nus_dev_ctrl_rx_handle
+					&& p_ble_nus_c->handles.nus_dev_tstart_tx_handle
+					&& p_ble_nus_c->handles.nus_dev_tstart_tx_cccd_handle
 			)
 			{
 				if (!BLE_connected)
@@ -358,7 +316,11 @@ static void ble_nus_c_evt_handler(ble_nus_c_t * p_ble_nus_c, ble_nus_c_evt_t con
 					APP_ERROR_CHECK(err_code);
 					err_code = ble_nus_c_tx_notif_enable(p_ble_nus_c,&(p_ble_nus_c->handles.nus_eeg_tx_cccd_handle));
 					APP_ERROR_CHECK(err_code);
-					printf("Connected to device with Hearable EEG & PPG Service.");
+					err_code = ble_nus_c_tx_notif_enable(p_ble_nus_c,&(p_ble_nus_c->handles.nus_acc_tx_cccd_handle));
+					APP_ERROR_CHECK(err_code);
+					err_code = ble_nus_c_tx_notif_enable(p_ble_nus_c,&(p_ble_nus_c->handles.nus_dev_tstart_tx_cccd_handle));
+					APP_ERROR_CHECK(err_code);
+					printf("Connected to device with Hearable EEG & PPG & ACCEL & DEV Service.");
 					BLE_connected=1;
 				}
 			}
@@ -376,20 +338,41 @@ static void ble_nus_c_evt_handler(ble_nus_c_t * p_ble_nus_c, ble_nus_c_evt_t con
 			break;
 
         case BLE_NUS_C_EVT_NUS_EEG_TX_EVT:
-//        	ble_nus_chars_received_uart_print((const uint8_t *) EEG_PREFIX,strlen(EEG_PREFIX));
-        	for (i=0;i<p_ble_nus_evt->data_len;i++) eeg_buff[eeg_idx][i+4] = * (p_ble_nus_evt->p_data +i);
-        	NRF_LOG_DEBUG("EEG length: %d, buffer %d", p_ble_nus_evt->data_len, eeg_idx);
-        	if (((eeg_idx+1) % EEG_BUFFER_COUNT) == prev_eeg_idx) NRF_LOG_ERROR("EEG data lost");
-        	eeg_idx = (eeg_idx+1) % EEG_BUFFER_COUNT;
+        	count =0;
+        	for (i=0;i<p_ble_nus_evt->data_len;i++)
+        		count+= ringbuf_put( &eegRing, *(p_ble_nus_evt->p_data +i)  );
+         	if (count != p_ble_nus_evt->data_len)
+        	{
+        		NRF_LOG_ERROR("EEG data lost");
+        		bsp_indication_set(BSP_INDICATE_RCV_ERROR);
+        	}
         	break;
 
         case BLE_NUS_C_EVT_NUS_PPG_TX_EVT:
-//        	ble_nus_chars_received_uart_print((const uint8_t *) PPG_PREFIX,strlen(PPG_PREFIX));
-        	for (j=0;j<p_ble_nus_evt->data_len;j++) ppg_buff[ppg_idx][j+4] = * (p_ble_nus_evt->p_data +j);
-        	NRF_LOG_DEBUG("PPG length: %d, buffer %d", p_ble_nus_evt->data_len,ppg_idx );
-        	if (((ppg_idx+1) % PPG_BUFFER_COUNT) == prev_ppg_idx) NRF_LOG_ERROR("PPG data lost");
-        	ppg_idx = (ppg_idx+1) % PPG_BUFFER_COUNT;
+        	count =0;
+			for (i=0;i<p_ble_nus_evt->data_len;i++)
+				count+= ringbuf_put(&ppgRing, *(p_ble_nus_evt->p_data +i));
+			if (count != p_ble_nus_evt->data_len)
+			{
+				NRF_LOG_ERROR("PPG data lost");
+				bsp_indication_set(BSP_INDICATE_RCV_ERROR);
+			}
         	break;
+
+        case BLE_NUS_C_EVT_NUS_ACC_TX_EVT:
+			count =0;
+			for (i=0;i<p_ble_nus_evt->data_len;i++)
+				count+= ringbuf_put(&accRing, *(p_ble_nus_evt->p_data +i));
+			if (count != p_ble_nus_evt->data_len)
+			{
+				NRF_LOG_ERROR("ACCEL data lost");
+				bsp_indication_set(BSP_INDICATE_RCV_ERROR);
+			}
+			break;
+
+        case BLE_NUS_C_EVT_NUS_DEV_TX_EVT:
+        	NRF_LOG_INFO("DEV service data received - no functionality programmed yet");
+			break;
 
         case BLE_NUS_C_EVT_DISCONNECTED:
             NRF_LOG_INFO("Disconnected.");
@@ -449,14 +432,24 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
             APP_ERROR_CHECK(err_code);
             err_code = ble_nus_c_handles_assign(&m_ble_nus_c, p_ble_evt->evt.gap_evt.conn_handle,BLE_UUID_PPG_NUS_SERVICE, NULL);
             APP_ERROR_CHECK(err_code);
+            err_code = ble_nus_c_handles_assign(&m_ble_nus_c, p_ble_evt->evt.gap_evt.conn_handle,BLE_UUID_ACC_NUS_SERVICE, NULL);
+            APP_ERROR_CHECK(err_code);
+            err_code = ble_nus_c_handles_assign(&m_ble_nus_c, p_ble_evt->evt.gap_evt.conn_handle,BLE_UUID_DEV_NUS_SERVICE, NULL);
+			APP_ERROR_CHECK(err_code);
+
 
             err_code = bsp_indication_set(BSP_INDICATE_CONNECTED);
             APP_ERROR_CHECK(err_code);
             NRF_LOG_INFO("Connected");
+//            ble_gap_phys_t const desired_phys =
+//			{
+//					.rx_phys = BLE_GAP_PHY_2MBPS,
+//					.tx_phys = BLE_GAP_PHY_2MBPS,
+//			};
             ble_gap_phys_t const desired_phys =
 			{
-					.rx_phys = BLE_GAP_PHY_2MBPS,
-					.tx_phys = BLE_GAP_PHY_2MBPS,
+					.rx_phys = BLE_GAP_PHY_AUTO,
+					.tx_phys = BLE_GAP_PHY_AUTO,
 			};
             err_code = sd_ble_gap_phy_update(p_gap_evt->conn_handle,&desired_phys);
             APP_ERROR_CHECK(err_code);
@@ -500,11 +493,16 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
         case BLE_GAP_EVT_PHY_UPDATE_REQUEST:
         {
             NRF_LOG_INFO("PHY update request.");
+//            ble_gap_phys_t const phys =
+//            {
+//                    .rx_phys = BLE_GAP_PHY_2MBPS,
+//                    .tx_phys = BLE_GAP_PHY_2MBPS,
+//            };
             ble_gap_phys_t const phys =
-            {
-                    .rx_phys = BLE_GAP_PHY_2MBPS,
-                    .tx_phys = BLE_GAP_PHY_2MBPS,
-            };
+				{
+						.rx_phys = BLE_GAP_PHY_AUTO,
+						.tx_phys = BLE_GAP_PHY_AUTO,
+				};
             err_code = sd_ble_gap_phy_update(p_ble_evt->evt.gap_evt.conn_handle, &phys);
             APP_ERROR_CHECK(err_code);
         } break;
@@ -612,32 +610,6 @@ void bsp_event_handler(bsp_event_t event)
     }
 }
 
-/**@brief Function for initializing the UART. */
-static void uart_init(void)
-{
-    ret_code_t err_code;
-
-//TODO Change this?
-    app_uart_comm_params_t const comm_params =
-    {
-        .rx_pin_no    = RX_PIN_NUMBER,
-        .tx_pin_no    = TX_PIN_NUMBER,
-        .rts_pin_no   = RTS_PIN_NUMBER,
-        .cts_pin_no   = CTS_PIN_NUMBER,
-        .flow_control = APP_UART_FLOW_CONTROL_DISABLED,
-        .use_parity   = false,
-        .baud_rate    = UART_BAUDRATE_BAUDRATE_Baud1M
-    };
-
-    APP_UART_FIFO_INIT(&comm_params,
-                       UART_RX_BUF_SIZE,
-                       UART_TX_BUF_SIZE,
-                       uart_event_handle,
-                       APP_IRQ_PRIORITY_LOWEST,
-                       err_code);
-
-    APP_ERROR_CHECK(err_code);
-}
 
 /**@brief Function for initializing the Nordic UART Service (NUS) client. */
 static void nus_c_init(void)
@@ -664,6 +636,217 @@ static void buttons_leds_init(void)
     err_code = bsp_btn_ble_init(NULL, &startup_event);
     APP_ERROR_CHECK(err_code);
 }
+
+
+//USB Code start
+
+/** @brief User event handler @ref app_usbd_cdc_acm_user_ev_handler_t */
+static void cdc_acm_user_ev_handler(app_usbd_class_inst_t const * p_inst,
+                                    app_usbd_cdc_acm_user_event_t event)
+{
+    app_usbd_cdc_acm_t const * p_cdc_acm = app_usbd_cdc_acm_class_get(p_inst);
+
+    switch (event)
+    {
+        case APP_USBD_CDC_ACM_USER_EVT_PORT_OPEN:
+        {
+            /*Set up the first transfer*/
+            ret_code_t ret = app_usbd_cdc_acm_read(&m_app_cdc_acm,
+                                                   m_cdc_data_array,
+                                                   1);
+            UNUSED_VARIABLE(ret);
+            NRF_LOG_INFO("CDC ACM port opened");
+            break;
+        }
+
+        case APP_USBD_CDC_ACM_USER_EVT_PORT_CLOSE:
+            NRF_LOG_INFO("CDC ACM port closed");
+            if (m_usb_connected)
+            {
+            }
+            break;
+
+        case APP_USBD_CDC_ACM_USER_EVT_TX_DONE:
+            break;
+
+        case APP_USBD_CDC_ACM_USER_EVT_RX_DONE:
+        {
+            ret_code_t ret;
+            static uint8_t index = 0;
+            uint8_t cmd[BLE_NUS_MAX_DATA_LEN];
+            uint16_t cmd_length;
+            index++;
+
+            do
+            {
+                if ((m_cdc_data_array[index - 1] == '\n') ||
+                    (m_cdc_data_array[index - 1] == '\r') ||
+                    (index >= (m_ble_nus_max_data_len)))
+                {
+                    if (index > 1)
+                    {
+                        NRF_LOG_DEBUG("Ready to send data over BLE NUS");
+                        NRF_LOG_HEXDUMP_DEBUG(m_cdc_data_array, index);
+
+                        do
+                        {
+                            uint16_t length = (uint16_t)index;
+//                            if (length + sizeof(ENDLINE_STRING) < BLE_NUS_MAX_DATA_LEN)
+//                            {
+//                                memcpy(m_cdc_data_array + length, ENDLINE_STRING, sizeof(ENDLINE_STRING));
+//                                length += sizeof(ENDLINE_STRING);
+//                            }
+
+                            if (strncmp(m_cdc_data_array,"start",5)==0)
+                            {
+
+                            	ringbuf_init (&eegRing, ringBuffer, RINGBUF_SIZE);
+								ringbuf_init (&ppgRing, ringBuffer2, RINGBUF_SIZE);
+								ringbuf_init (&accRing, ringBuffer3, RINGBUF_SIZE);
+
+                            	cmd[0] = 1;
+                            	cmd_length=1;
+                            	ret = ble_nus_c_string_send(&m_ble_nus_c,
+									&cmd[0],
+									cmd_length,
+									m_ble_nus_c.handles.nus_dev_ctrl_rx_handle);
+                            }
+							else if (strncmp(m_cdc_data_array,"stop",4)==0)
+							{
+								cmd[0] = 0;
+								cmd_length=1;
+								ret = ble_nus_c_string_send(&m_ble_nus_c,
+									&cmd[0],
+									cmd_length,
+									m_ble_nus_c.handles.nus_dev_ctrl_rx_handle);
+							}
+							else if ((strncmp(m_cdc_data_array,"eegconfig",9)==0) && (length>=9+EEG_CONFIG_LENGTH))
+							{
+								for (int i=0;i<EEG_CONFIG_LENGTH;i++) cmd[i] = m_cdc_data_array[9+i];
+								cmd_length=EEG_CONFIG_LENGTH;
+								ret = ble_nus_c_string_send(&m_ble_nus_c,
+									&cmd[0],
+									cmd_length,
+									m_ble_nus_c.handles.nus_eeg_rx_handle);
+							}
+							else if ((strncmp(m_cdc_data_array,"ppgconfig",9)==0) && (length>=9+PPG_CONFIG_LENGTH))
+							{
+								for (int i=0;i<PPG_CONFIG_LENGTH;i++) cmd[i] = m_cdc_data_array[9+i];
+								cmd_length=PPG_CONFIG_LENGTH;
+								ret = ble_nus_c_string_send(&m_ble_nus_c,
+									&cmd[0],
+									cmd_length,
+									m_ble_nus_c.handles.nus_ppg_rx_handle);
+							}
+							else if ((strncmp(m_cdc_data_array,"accconfig",9)==0) && (length>=9+ACC_CONFIG_LENGTH))
+							{
+								for (int i=0;i<ACC_CONFIG_LENGTH;i++) cmd[i] = m_cdc_data_array[9+i];
+								cmd_length=ACC_CONFIG_LENGTH;
+								ret = ble_nus_c_string_send(&m_ble_nus_c,
+									&cmd[0],
+									cmd_length,
+									m_ble_nus_c.handles.nus_acc_rx_handle);
+							}
+							else
+							{
+								NRF_LOG_INFO("Invalid command");
+								ret = NRF_SUCCESS;
+							}
+
+
+                            if (ret == NRF_ERROR_NOT_FOUND)
+                            {
+                                NRF_LOG_INFO("BLE NUS unavailable, data received: %s", m_cdc_data_array);
+                                break;
+                            }
+
+                            if (ret == NRF_ERROR_RESOURCES)
+                            {
+                                NRF_LOG_ERROR("BLE NUS Too many notifications queued.");
+                                break;
+                            }
+
+                            if ((ret != NRF_ERROR_INVALID_STATE) && (ret != NRF_ERROR_BUSY))
+                            {
+                                APP_ERROR_CHECK(ret);
+                            }
+                        }
+                        while (ret == NRF_ERROR_BUSY);
+                    }
+
+                    index = 0;
+                }
+
+                /*Get amount of data transferred*/
+                size_t size = app_usbd_cdc_acm_rx_size(p_cdc_acm);
+                NRF_LOG_DEBUG("RX: size: %lu char: %c", size, m_cdc_data_array[index - 1]);
+
+                /* Fetch data until internal buffer is empty */
+                ret = app_usbd_cdc_acm_read(&m_app_cdc_acm,
+                                            &m_cdc_data_array[index],
+                                            1);
+                if (ret == NRF_SUCCESS)
+                {
+                    index++;
+                }
+            }
+            while (ret == NRF_SUCCESS);
+
+            break;
+        }
+        default:
+            break;
+    }
+}
+
+static void usbd_user_ev_handler(app_usbd_event_type_t event)
+{
+    switch (event)
+    {
+        case APP_USBD_EVT_DRV_SUSPEND:
+            break;
+
+        case APP_USBD_EVT_DRV_RESUME:
+            break;
+
+        case APP_USBD_EVT_STARTED:
+            break;
+
+        case APP_USBD_EVT_STOPPED:
+            app_usbd_disable();
+            break;
+
+        case APP_USBD_EVT_POWER_DETECTED:
+            NRF_LOG_INFO("USB power detected");
+
+            if (!nrf_drv_usbd_is_enabled())
+            {
+                app_usbd_enable();
+            }
+            break;
+
+        case APP_USBD_EVT_POWER_REMOVED:
+        {
+            NRF_LOG_INFO("USB power removed");
+            m_usb_connected = false;
+            app_usbd_stop();
+        }
+            break;
+
+        case APP_USBD_EVT_POWER_READY:
+        {
+            NRF_LOG_INFO("USB ready");
+            m_usb_connected = true;
+            app_usbd_start();
+        }
+            break;
+
+        default:
+            break;
+    }
+}
+
+// USB CODE END
 
 
 /**@brief Function for initializing the timer. */
@@ -718,54 +901,91 @@ static void idle_state_handle(void)
 int main(void)
 {
     // Initialize.
+	int i;
+	ret_code_t ret;
+	static const app_usbd_config_t usbd_config = {.ev_state_proc = usbd_user_ev_handler    };
     log_init();
     timer_init();
-    uart_init();
     buttons_leds_init();
+	app_usbd_serial_num_generate();
     db_discovery_init();
     power_management_init();
+
+	ret = app_usbd_init(&usbd_config);
+    APP_ERROR_CHECK(ret);
+
+    app_usbd_class_inst_t const * class_cdc_acm = app_usbd_cdc_acm_class_inst_get(&m_app_cdc_acm);
+    ret = app_usbd_class_append(class_cdc_acm);
+    APP_ERROR_CHECK(ret);
+
     ble_stack_init();
     gatt_init();
     nus_c_init();
     scan_init();
-    int i;
+    
+	ret = app_usbd_power_events_enable();
+    APP_ERROR_CHECK(ret);
 
 
-    for (i=0;i<EEG_BUFFER_COUNT;i++)
-    {
-		eeg_buff[i][0]='E';
-		eeg_buff[i][1]='E';
-		eeg_buff[i][2]='G';
-		eeg_buff[i][3]='_';
-    }
-    for (i=0;i<PPG_BUFFER_COUNT;i++)
-	{
-		ppg_buff[i][0]='P';
-		ppg_buff[i][1]='P';
-		ppg_buff[i][2]='G';
-		ppg_buff[i][3]='_';
-	}
+
+    /////////////////////
+    //Ring buffer init
+
+    ringbuf_init (&eegRing, ringBuffer, RINGBUF_SIZE);
+    ringbuf_init (&ppgRing, ringBuffer2, RINGBUF_SIZE);
+    ringbuf_init (&accRing, ringBuffer3, RINGBUF_SIZE);
+
+
+    //TODO Fix this initialisation so that it automatically changes with changes in prefix and prefix length
+    	usbBuffer[0][0]='E';
+    	usbBuffer[0][1]='E';
+    	usbBuffer[0][2]='G';
+    	usbBuffer[0][3]='_';
+
+    	usbBuffer[1][0]='P';
+    	usbBuffer[1][1]='P';
+    	usbBuffer[1][2]='G';
+    	usbBuffer[1][3]='_';
+
+    	usbBuffer[2][0]='A';
+		usbBuffer[2][1]='C';
+		usbBuffer[2][2]='C';
+		usbBuffer[2][3]='_';
+    ///////////////////////////////////
 
 
 
     // Start execution.
-    printf("BLE UART central example started.\r\n");
+    NRF_LOG_INFO("BLE UART central example started.\r\n");
     NRF_LOG_INFO("BLE UART central example started.");
     scan_start();
 
     // Enter main loop.
     for (;;)
     {
-    	if(prev_eeg_idx != eeg_idx)
-    	{
-    		ble_nus_chars_received_uart_print(& eeg_buff[prev_eeg_idx][0], BUFFER_LENGTH);
-    		prev_eeg_idx = (prev_eeg_idx+1) % EEG_BUFFER_COUNT;
-    	}
-    	if(prev_ppg_idx != ppg_idx)
+		while (app_usbd_event_queue_process());
+
+		while (ringbuf_elements(&eegRing) >= (USB_PACKET_SIZE-PREFIX_LENGTH))
 		{
-			ble_nus_chars_received_uart_print(& ppg_buff[prev_ppg_idx][0], BUFFER_LENGTH);
-			prev_ppg_idx = (prev_ppg_idx+1) % PPG_BUFFER_COUNT;
+			for (i=0;i<(USB_PACKET_SIZE-PREFIX_LENGTH);i++) 	usbBuffer[0][i+PREFIX_LENGTH] = ringbuf_get(&eegRing);
+			ret = app_usbd_cdc_acm_write(&m_app_cdc_acm, &usbBuffer[0],USB_PACKET_SIZE);
+			if(ret != NRF_SUCCESS) NRF_LOG_INFO("CDC ACM unavailable");
 		}
+
+		while (ringbuf_elements(&ppgRing) >= (USB_PACKET_SIZE -PREFIX_LENGTH))
+		{
+			for (i=0;i<(USB_PACKET_SIZE-PREFIX_LENGTH);i++) 	usbBuffer[1][i+PREFIX_LENGTH] = ringbuf_get(&ppgRing);
+			ret = app_usbd_cdc_acm_write(&m_app_cdc_acm, &usbBuffer[1],USB_PACKET_SIZE);
+			if(ret != NRF_SUCCESS) NRF_LOG_INFO("CDC ACM unavailable");
+		}
+
+		while (ringbuf_elements(&accRing) >= (USB_PACKET_SIZE -PREFIX_LENGTH))
+		{
+			for (i=0;i<(USB_PACKET_SIZE-PREFIX_LENGTH);i++) 	usbBuffer[2][i+PREFIX_LENGTH] = ringbuf_get(&accRing);
+			ret = app_usbd_cdc_acm_write(&m_app_cdc_acm, &usbBuffer[2],USB_PACKET_SIZE);
+			if(ret != NRF_SUCCESS) NRF_LOG_INFO("CDC ACM unavailable");
+		}
+
         idle_state_handle();
     }
 }
