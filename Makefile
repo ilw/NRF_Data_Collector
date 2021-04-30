@@ -72,6 +72,7 @@ SRC_FILES += \
   
 # Include folders common to all targets
 INC_FOLDERS += \
+  $(PROJ_DIR)/src \
   $(SDK_ROOT)/components/nfc/ndef/generic/message \
   $(SDK_ROOT)/components/nfc/t2t_lib \
   $(SDK_ROOT)/components/nfc/t4t_parser/hl_detection_procedure \
@@ -211,7 +212,6 @@ INC_FOLDERS += \
   $(SDK_ROOT)/components/libraries/usbd \
   $(SDK_ROOT)/integration/nrfx/legacy \
   $(SDK_ROOT)/integration/nrfx \
-  $(PROJ_DIR)/src \
 
 # Libraries common to all targets
 LIB_FILES += \

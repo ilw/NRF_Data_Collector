@@ -149,6 +149,45 @@ static void on_write_rsp(ble_nus_c_t * p_ble_nus_c, const ble_evt_t * p_ble_evt)
 }
 
 
+/**@brief     Function for handling read response events.
+ *
+ * @details   This function will validate the read response and raise the appropriate
+ *            event to the application.
+ *
+ * @param[in] p_bas_c   Pointer to the Battery Service Client Structure.
+ * @param[in] p_ble_evt Pointer to the SoftDevice event.
+ */
+static void on_read_rsp(ble_nus_c_t * p_ble_nus_c, const ble_evt_t * p_ble_evt)
+{
+    const ble_gattc_evt_read_rsp_t * p_response;
+
+    // Check if the event if on the link for this instance
+    if (p_ble_nus_c->conn_handle != p_ble_evt->evt.gattc_evt.conn_handle)
+    {
+        return;
+    }
+
+    p_response = &p_ble_evt->evt.gattc_evt.params.read_rsp;
+    //&p_ble_evt->evt.gattc_evt.params.char_vals_read_rsp
+
+    if (p_response->handle == p_ble_nus_c->handles.nus_dis_hw_rev_handle)  //peer_nus_db.bl_handle
+    {
+        ble_nus_c_evt_t evt;
+
+        evt.conn_handle = p_ble_evt->evt.gattc_evt.conn_handle;
+        evt.evt_type = BLE_NUS_C_EVT_DIS_READ_RESP;
+        evt.data_len = p_response->len;
+        evt.p_data = (uint8_t *)p_response->data; // @suppress("Type cannot be resolved")
+        //NRF_LOG_INFO("Characteristic read");
+
+
+        p_ble_nus_c->evt_handler(p_ble_nus_c, &evt);
+    }
+    // Check if there is any buffered transmissions and send them.
+//    tx_buffer_process();
+}
+
+
 void ble_nus_c_on_db_disc_evt(ble_nus_c_t * p_ble_nus_c, ble_db_discovery_evt_t * p_evt)
 {
     ble_nus_c_evt_t nus_c_evt;
@@ -163,8 +202,9 @@ void ble_nus_c_on_db_disc_evt(ble_nus_c_t * p_ble_nus_c, ble_db_discovery_evt_t 
         		|| (p_evt->params.discovered_db.srv_uuid.uuid == BLE_UUID_PPG_NUS_SERVICE)
 				|| (p_evt->params.discovered_db.srv_uuid.uuid == BLE_UUID_ACC_NUS_SERVICE)
 				|| (p_evt->params.discovered_db.srv_uuid.uuid == BLE_UUID_DEV_NUS_SERVICE)
+				|| (p_evt->params.discovered_db.srv_uuid.uuid == BLE_UUID_DEVICE_INFORMATION_SERVICE)
 			)
-        &&  (p_evt->params.discovered_db.srv_uuid.type == p_ble_nus_c->uuid_type))
+		)
     {
         for (uint32_t i = 0; i < p_evt->params.discovered_db.char_count; i++)
         {
@@ -211,7 +251,9 @@ void ble_nus_c_on_db_disc_evt(ble_nus_c_t * p_ble_nus_c, ble_db_discovery_evt_t 
 					nus_c_evt.handles.nus_dev_tstart_tx_cccd_handle = p_chars[i].cccd_handle;
 					break;
 
-
+				case BLE_UUID_HARDWARE_REVISION_STRING_CHAR:
+					nus_c_evt.handles.nus_dis_hw_rev_handle = p_chars[i].characteristic.handle_value;
+					break;
                 default:
                     break;
             }
@@ -302,7 +344,7 @@ static void on_hvx(ble_nus_c_t * p_ble_nus_c, ble_evt_t const * p_ble_evt)
 uint32_t ble_nus_c_init(ble_nus_c_t * p_ble_nus_c, ble_nus_c_init_t * p_ble_nus_c_init)
 {
     uint32_t      err_code;
-    ble_uuid_t    eeg_uuid,ppg_uuid, acc_uuid, dev_uuid;
+    ble_uuid_t    eeg_uuid,ppg_uuid, acc_uuid, dev_uuid,dis_uuid;
     ble_uuid128_t nus_base_uuid = HEARABLES_BASE_UUID;
 
     VERIFY_PARAM_NOT_NULL(p_ble_nus_c);
@@ -311,7 +353,7 @@ uint32_t ble_nus_c_init(ble_nus_c_t * p_ble_nus_c, ble_nus_c_init_t * p_ble_nus_
     err_code = sd_ble_uuid_vs_add(&nus_base_uuid, &p_ble_nus_c->uuid_type);
     VERIFY_SUCCESS(err_code);
     err_code = sd_ble_uuid_vs_add(&nus_base_uuid, &p_ble_nus_c->uuid_type);
-	VERIFY_SUCCESS(err_code);
+	VERIFY_SUCCESS(err_code); //TODO test whetehr i need this twice...
 
     eeg_uuid.type = p_ble_nus_c->uuid_type;
     eeg_uuid.uuid = BLE_UUID_EEG_NUS_SERVICE;
@@ -321,6 +363,8 @@ uint32_t ble_nus_c_init(ble_nus_c_t * p_ble_nus_c, ble_nus_c_init_t * p_ble_nus_
 	acc_uuid.uuid = BLE_UUID_ACC_NUS_SERVICE;
 	dev_uuid.type = p_ble_nus_c->uuid_type;
 	dev_uuid.uuid = BLE_UUID_DEV_NUS_SERVICE;
+	dis_uuid.type = BLE_UUID_TYPE_BLE;
+	dis_uuid.uuid = BLE_UUID_DEVICE_INFORMATION_SERVICE;
 
     p_ble_nus_c->conn_handle           = BLE_CONN_HANDLE_INVALID;
     p_ble_nus_c->evt_handler           = p_ble_nus_c_init->evt_handler;
@@ -333,12 +377,15 @@ uint32_t ble_nus_c_init(ble_nus_c_t * p_ble_nus_c, ble_nus_c_init_t * p_ble_nus_
 	p_ble_nus_c->handles.nus_dev_status_tx_handle = BLE_GATT_HANDLE_INVALID;
 	p_ble_nus_c->handles.nus_dev_ctrl_rx_handle = BLE_GATT_HANDLE_INVALID;
 	p_ble_nus_c->handles.nus_dev_tstart_tx_handle = BLE_GATT_HANDLE_INVALID;
+	p_ble_nus_c->handles.nus_dis_hw_rev_handle = BLE_GATT_HANDLE_INVALID;
+
 
 
     err_code = ble_db_discovery_evt_register(&eeg_uuid);
     err_code = ble_db_discovery_evt_register(&ppg_uuid);
     err_code = ble_db_discovery_evt_register(&acc_uuid);
     err_code = ble_db_discovery_evt_register(&dev_uuid);
+    err_code = ble_db_discovery_evt_register(&dis_uuid);
 
     return err_code;
 }
@@ -381,6 +428,9 @@ void ble_nus_c_on_ble_evt(ble_evt_t const * p_ble_evt, void * p_context)
                 p_ble_nus_c->evt_handler(p_ble_nus_c, &nus_c_evt);
             }
             break;
+        case BLE_GATTC_EVT_READ_RSP:
+        	on_read_rsp(p_ble_nus_c, p_ble_evt);
+        	break;
 
         default:
             // No implementation needed.
@@ -494,6 +544,10 @@ uint32_t ble_nus_c_handles_assign(ble_nus_c_t               * p_ble_nus,
     		p_ble_nus->handles.nus_dev_ctrl_rx_handle      = p_peer_handles->nus_dev_ctrl_rx_handle;
 			p_ble_nus->handles.nus_dev_tstart_tx_handle      = p_peer_handles->nus_dev_tstart_tx_handle;
 			p_ble_nus->handles.nus_dev_tstart_tx_cccd_handle      = p_peer_handles->nus_dev_tstart_tx_cccd_handle;
+    	}
+    	else if (srv_uuid == BLE_UUID_DEVICE_INFORMATION_SERVICE)
+    	{
+    		p_ble_nus->handles.nus_dis_hw_rev_handle =  p_peer_handles->nus_dis_hw_rev_handle;
     	}
     }
     return NRF_SUCCESS;

@@ -69,7 +69,7 @@
 #include "app_usbd_cdc_acm.h"
 #include "app_usbd_serial_num.h"
 #include "ringbuf.h"
-
+#include "ble_srv_common.h"
 
 #define ENDLINE_STRING "\r\n"
 
@@ -144,7 +144,7 @@ static char const m_target_periph_name[] = "Hearable";
 #define RINGBUF_SIZE 8192 //Power of 2!
 #define USB_PACKET_SIZE 2048
 
-static uint8_t usbBuffer[3][USB_PACKET_SIZE];
+static uint8_t usbBuffer[4][USB_PACKET_SIZE];
 
 struct ringbuf eegRing,ppgRing,accRing;
 static uint8_t ringBuffer[RINGBUF_SIZE];
@@ -153,6 +153,11 @@ static uint8_t ringBuffer3[RINGBUF_SIZE];
 
 
 static uint8_t BLE_connected=0;
+
+volatile bool nameReceived = false;
+volatile int hardwareNameLength=0;
+uint8_t  hardwareName[NRF_SDH_BLE_GATT_MAX_MTU_SIZE];
+
 
 #define EEG_CONFIG_LENGTH 11
 #define PPG_CONFIG_LENGTH 11
@@ -308,6 +313,7 @@ static void ble_nus_c_evt_handler(ble_nus_c_t * p_ble_nus_c, ble_nus_c_evt_t con
 					&& p_ble_nus_c->handles.nus_dev_ctrl_rx_handle
 					&& p_ble_nus_c->handles.nus_dev_tstart_tx_handle
 					&& p_ble_nus_c->handles.nus_dev_tstart_tx_cccd_handle
+					&& p_ble_nus_c->handles.nus_dis_hw_rev_handle
 			)
 			{
 				if (!BLE_connected)
@@ -379,6 +385,14 @@ static void ble_nus_c_evt_handler(ble_nus_c_t * p_ble_nus_c, ble_nus_c_evt_t con
             BLE_connected=0;
             scan_start();
             break;
+
+        case BLE_NUS_C_EVT_DIS_READ_RESP:
+        	hardwareNameLength = p_ble_nus_evt->data_len;
+        	for (i=0;i<hardwareNameLength;i++) hardwareName[i] = p_ble_nus_evt->p_data[i];
+        	hardwareName[hardwareNameLength+1] = '\0';
+        	NRF_LOG_INFO("Name received is length %d and is %s", hardwareNameLength,hardwareName);
+        	nameReceived = true;
+        	break;
     }
 }
 /**@snippet [Handling events from the ble_nus_c module] */
@@ -435,6 +449,8 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
             err_code = ble_nus_c_handles_assign(&m_ble_nus_c, p_ble_evt->evt.gap_evt.conn_handle,BLE_UUID_ACC_NUS_SERVICE, NULL);
             APP_ERROR_CHECK(err_code);
             err_code = ble_nus_c_handles_assign(&m_ble_nus_c, p_ble_evt->evt.gap_evt.conn_handle,BLE_UUID_DEV_NUS_SERVICE, NULL);
+			APP_ERROR_CHECK(err_code);
+			err_code = ble_nus_c_handles_assign(&m_ble_nus_c, p_ble_evt->evt.gap_evt.conn_handle,BLE_UUID_DEVICE_INFORMATION_SERVICE, NULL);
 			APP_ERROR_CHECK(err_code);
 
 
@@ -671,7 +687,7 @@ static void cdc_acm_user_ev_handler(app_usbd_class_inst_t const * p_inst,
 
         case APP_USBD_CDC_ACM_USER_EVT_RX_DONE:
         {
-            ret_code_t ret;
+            ret_code_t ret,ble_ret;
             static uint8_t index = 0;
             uint8_t cmd[BLE_NUS_MAX_DATA_LEN];
             uint16_t cmd_length;
@@ -720,7 +736,22 @@ static void cdc_acm_user_ev_handler(app_usbd_class_inst_t const * p_inst,
 									cmd_length,
 									m_ble_nus_c.handles.nus_dev_ctrl_rx_handle);
 							}
-							else if ((strncmp(m_cdc_data_array,"eegconfig",9)==0) && (length>=9+EEG_CONFIG_LENGTH))
+							else if (strncmp(m_cdc_data_array,"uname",5)==0)
+							{
+								if ((m_ble_nus_c.handles.nus_dis_hw_rev_handle != BLE_GATT_HANDLE_INVALID) && (m_ble_nus_c.conn_handle != BLE_CONN_HANDLE_INVALID)) //if connected and service exists
+								{
+									ble_ret = sd_ble_gattc_read(m_ble_nus_c.conn_handle,m_ble_nus_c.handles.nus_dis_hw_rev_handle,0);
+//									APP_ERROR_CHECK(ble_ret);
+									if (ble_ret == NRF_SUCCESS) NRF_LOG_INFO("Name requested");
+								}
+								else
+								{
+									hardwareNameLength = 0;
+									nameReceived = true; //Send out dummy data to indicate lack of connection
+
+								}
+							}
+							else if ((strncmp(m_cdc_data_array,"configeeg",9)==0) && (length>=9+EEG_CONFIG_LENGTH))
 							{
 								for (int i=0;i<EEG_CONFIG_LENGTH;i++) cmd[i] = m_cdc_data_array[9+i];
 								cmd_length=EEG_CONFIG_LENGTH;
@@ -728,8 +759,9 @@ static void cdc_acm_user_ev_handler(app_usbd_class_inst_t const * p_inst,
 									&cmd[0],
 									cmd_length,
 									m_ble_nus_c.handles.nus_eeg_rx_handle);
+								if (ret==NRF_SUCCESS) bsp_indication_set(BSP_INDICATE_SENT_OK);
 							}
-							else if ((strncmp(m_cdc_data_array,"ppgconfig",9)==0) && (length>=9+PPG_CONFIG_LENGTH))
+							else if ((strncmp(m_cdc_data_array,"configppg",9)==0) && (length>=9+PPG_CONFIG_LENGTH))
 							{
 								for (int i=0;i<PPG_CONFIG_LENGTH;i++) cmd[i] = m_cdc_data_array[9+i];
 								cmd_length=PPG_CONFIG_LENGTH;
@@ -737,8 +769,9 @@ static void cdc_acm_user_ev_handler(app_usbd_class_inst_t const * p_inst,
 									&cmd[0],
 									cmd_length,
 									m_ble_nus_c.handles.nus_ppg_rx_handle);
+								if (ret==NRF_SUCCESS) bsp_indication_set(BSP_INDICATE_SENT_OK);
 							}
-							else if ((strncmp(m_cdc_data_array,"accconfig",9)==0) && (length>=9+ACC_CONFIG_LENGTH))
+							else if ((strncmp(m_cdc_data_array,"configacc",9)==0) && (length>=9+ACC_CONFIG_LENGTH))
 							{
 								for (int i=0;i<ACC_CONFIG_LENGTH;i++) cmd[i] = m_cdc_data_array[9+i];
 								cmd_length=ACC_CONFIG_LENGTH;
@@ -746,6 +779,7 @@ static void cdc_acm_user_ev_handler(app_usbd_class_inst_t const * p_inst,
 									&cmd[0],
 									cmd_length,
 									m_ble_nus_c.handles.nus_acc_rx_handle);
+								if (ret==NRF_SUCCESS) bsp_indication_set(BSP_INDICATE_SENT_OK);
 							}
 							else
 							{
@@ -951,6 +985,11 @@ int main(void)
 		usbBuffer[2][1]='C';
 		usbBuffer[2][2]='C';
 		usbBuffer[2][3]='_';
+
+		usbBuffer[3][0]='N';
+		usbBuffer[3][1]='A';
+		usbBuffer[3][2]='M';
+		usbBuffer[3][3]='E';
     ///////////////////////////////////
 
 
@@ -983,6 +1022,14 @@ int main(void)
 		{
 			for (i=0;i<(USB_PACKET_SIZE-PREFIX_LENGTH);i++) 	usbBuffer[2][i+PREFIX_LENGTH] = ringbuf_get(&accRing);
 			ret = app_usbd_cdc_acm_write(&m_app_cdc_acm, &usbBuffer[2],USB_PACKET_SIZE);
+			if(ret != NRF_SUCCESS) NRF_LOG_INFO("CDC ACM unavailable");
+		}
+		if (nameReceived)
+		{
+			nameReceived = false;
+			for (i=0;i<hardwareNameLength;i++) 	usbBuffer[3][i+PREFIX_LENGTH] = hardwareName[i];
+			for (i=0; i<(USB_PACKET_SIZE-PREFIX_LENGTH-hardwareNameLength);i++) usbBuffer[3][i+PREFIX_LENGTH+hardwareNameLength] = 0;
+			ret = app_usbd_cdc_acm_write(&m_app_cdc_acm, &usbBuffer[3],USB_PACKET_SIZE);
 			if(ret != NRF_SUCCESS) NRF_LOG_INFO("CDC ACM unavailable");
 		}
 
