@@ -1,6 +1,9 @@
-PROJECT_NAME     := ble_app_uart_c_pca10059_s140
+PROJECT_NAME     := NRF_Data_Collector
 TARGETS          := nrf52840_xxaa
 OUTPUT_DIRECTORY := _build
+
+TARGET_BOARD := BOARD_PCA10059
+#TARGET_BOARD := BOARD_PCA10056
 
 SDK_ROOT := ../nRF5_SDK_15.3.0_59ac345
 PROJ_DIR := .
